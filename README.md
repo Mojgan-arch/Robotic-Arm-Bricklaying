@@ -29,7 +29,20 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
 
 ## Milestone status
 
-- M0: package, strict schemas, offline mock, configuration, artifact logging and CLI.
-- M1–M10: pending implementation and acceptance runs.
+- M0: package, strict schemas, all nine offline agent outputs, configuration,
+  artifact logging and CLI. Acceptance: 11 tests passed; CLI help works.
+- M1: isolated PyBullet world, Panda, supply, finger-contact-checked fixed grasp,
+  motor-driven joint interpolation and RGB-D camera with MP4 recorder.
+  Acceptance: five bricks placed; physics pick/place test passes (12 tests total).
+- M2–M10: pending implementation and acceptance runs.
+
+```powershell
+python scripts/demo.py --milestone 1
+```
+
+The command saves `video.mp4`, `final.png`, a configuration snapshot and a measured
+placement report in a unique `runs/` directory. Use `--no-video` for faster tests.
+The M1 controller interpolates joint targets and is an open-loop baseline; it has
+no obstacle avoidance yet. It never teleports bricks to make placement succeed.
 
 This is simulation research software. It is not a certified controller for hardware.
