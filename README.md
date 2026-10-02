@@ -34,7 +34,10 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
 - M1: isolated PyBullet world, Panda, supply, finger-contact-checked fixed grasp,
   motor-driven joint interpolation and RGB-D camera with MP4 recorder.
   Acceptance: five bricks placed; physics pick/place test passes (12 tests total).
-- M2–M10: pending implementation and acceptance runs.
+- M2: seeded DSL compiler and footprint verifier. Acceptance: 24 tests pass,
+  including three distinct 20-degree patterns, hand-made failures for every check,
+  running bond, rule composition and a full-size verifier runtime below one second.
+- M3–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -44,5 +47,15 @@ The command saves `video.mp4`, `final.png`, a configuration snapshot and a measu
 placement report in a unique `runs/` directory. Use `--no-video` for faster tests.
 The M1 controller interpolates joint targets and is an open-loop baseline; it has
 no obstacle avoidance yet. It never teleports bricks to make placement succeed.
+
+`python scripts/demo.py --milestone 2` saves three verified designs and PNG previews.
+Brick centres use metres in the simulation world frame. The wall runs along X and
+is centred at `geometry.origin`; its Z coordinate denotes the table surface.
+Rotation is around each brick's own Z axis. Phase shifts are radians per course.
+Regions include their course bounds; `u` uses the cell centre along the wall.
+Diamond uses a normalized Manhattan-distance shape; stripe uses a centred interval.
+Gradient/random openings use seeded Bernoulli sampling; checker further restricts
+the alternating parity cells. Geometry may reject artistic requests when they
+create unsupported bricks; the compiler does not silently fill openings.
 
 This is simulation research software. It is not a certified controller for hardware.
