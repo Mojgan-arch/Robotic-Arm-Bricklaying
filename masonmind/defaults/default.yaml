@@ -27,6 +27,7 @@ sim:
   home: [0.0, -0.45, 0.0, -2.30, 0.0, 1.85, 0.78]
   grasp_offset: 0.008
   approach_height: 0.10
+  cartesian_step_m: 0.005
   ik_tolerance: 0.008
   motor_force: 120.0
   camera_width: 640

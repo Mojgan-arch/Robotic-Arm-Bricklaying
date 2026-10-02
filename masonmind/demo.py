@@ -16,6 +16,9 @@ def run_demo(args: Namespace) -> None:
     if args.milestone == 2:
         design_demo(args)
         return
+    if args.milestone == 3:
+        baseline_demo(args)
+        return
     if args.milestone != 1:
         raise ValueError("Only milestone 1 is implemented at this development stage")
     config = load_config()
@@ -72,3 +75,37 @@ def design_demo(args: Namespace) -> None:
                 world.spawn_brick(brick.id, [brick.x, brick.y, brick.z], brick.yaw_deg)
             Image.fromarray(Camera(world).capture(unproject=False).rgb).save(run / f"{kind}.png")
     print(f"Three verified designs: {run.resolve()}")
+
+
+def baseline_demo(args: Namespace) -> None:
+    """Physically build two full walls with different verified orders."""
+    from masonmind.schemas import DesignProgram, SequenceStrategy
+    from masonmind.design.compiler import compile_program
+    from masonmind.design.sequencer import plan_sequence
+    from masonmind.design.verifier import verify
+    from PIL import Image
+    config = load_config()
+    config["sim"]["gui"] = args.gui
+    design = compile_program(DesignProgram(n_courses=3, bricks_per_course=4, bond="stack", seed=args.seed, rationale="B0"), config)
+    if not verify(design, config).passed:
+        raise RuntimeError("Baseline geometry failed")
+    for name in ("left_to_right", "right_to_left"):
+        run = create_run()
+        sequence = plan_sequence(design, SequenceStrategy(strategy=name, rationale="Baseline comparison"), config)
+        if not sequence.report.passed:
+            raise RuntimeError(sequence.report.model_dump_json())
+        save_json(run / "design.json", design)
+        save_json(run / "sequence.json", sequence)
+        with World(config) as world:
+            arm = Panda(world)
+            by_id = {b.id: b for b in design.bricks}
+            for name_id in sequence.order:
+                brick = by_id[name_id]
+                body = world.spawn_brick(name_id)
+                world.step(config["sim"]["settle_steps"])
+                arm.pick_place(body, config["sim"]["supply"], [brick.x, brick.y, brick.z], brick.yaw_deg)
+            Image.fromarray(Camera(world).capture(unproject=False).rgb).save(run / "final.png")
+            errors = {b.id: float(np.linalg.norm(np.array(p.getBasePositionAndOrientation(world.bricks[b.id], physicsClientId=world.cid)[0]) -
+                                                [b.x, b.y, b.z]) * 1000) for b in design.bricks}
+            save_json(run / "report.json", {"variant": "B0", "strategy": name, "placement_error_mm": errors})
+        print(f"Built {name}: {run.resolve()}")

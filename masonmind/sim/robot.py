@@ -72,6 +72,10 @@ class Panda:
         """Plan to an IK target, then execute the joint-space path."""
         start, goal = self.state(), self.ik(position, yaw_deg)
         path = self.plan(start, goal) if self.plan else [start, goal]
+        self.execute_path(path)
+
+    def execute_path(self, path: list[np.ndarray]) -> None:
+        """Execute a joint path using configured motor limits."""
         if self.execute:
             self.execute(path)
             return
@@ -83,6 +87,19 @@ class Panda:
                 self.command(a + u * (b - a))
                 self.world.step()
         self.world.step(self.world.sim["settle_steps"])
+
+    def vertical_move(self, position: list[float], yaw_deg: float = 0) -> None:
+        """Constrain the final approach to a sampled Cartesian vertical line."""
+        start_position = np.asarray(self.pose()[0])
+        distance = np.linalg.norm(np.asarray(position) - start_position)
+        count = max(1, int(np.ceil(distance / self.world.sim["cartesian_step_m"])))
+        path = [self.state()]
+        for fraction in np.linspace(0, 1, count + 1)[1:]:
+            target = start_position + fraction * (np.asarray(position) - start_position)
+            goal = self.ik(target.tolist(), yaw_deg)
+            segment = self.plan(path[-1], goal) if self.plan else [path[-1], goal]
+            path.extend(segment[1:])
+        self.execute_path(path)
 
     def grasp(self, body: int) -> None:
         """Attach only when a finger has reached the brick."""
@@ -119,10 +136,10 @@ class Panda:
         place = np.asarray(target, dtype=float) + [0, 0, offset]
         self.fingers(0.04)
         self.move((pick + [0, 0, height]).tolist(), source_yaw_deg)
-        self.move(pick.tolist(), source_yaw_deg)
+        self.vertical_move(pick.tolist(), source_yaw_deg)
         self.grasp(body)
-        self.move((pick + [0, 0, height]).tolist(), source_yaw_deg)
+        self.vertical_move((pick + [0, 0, height]).tolist(), source_yaw_deg)
         self.move((place + [0, 0, height]).tolist(), yaw_deg)
-        self.move(place.tolist(), yaw_deg)
+        self.vertical_move(place.tolist(), yaw_deg)
         self.release()
-        self.move((place + [0, 0, height]).tolist(), yaw_deg)
+        self.vertical_move((place + [0, 0, height]).tolist(), yaw_deg)

@@ -37,7 +37,11 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
 - M2: seeded DSL compiler and footprint verifier. Acceptance: 24 tests pass,
   including three distinct 20-degree patterns, hand-made failures for every check,
   running bond, rule composition and a full-size verifier runtime below one second.
-- M3–M10: pending implementation and acceptance runs.
+- M3: precedence graph, six strategies, vertical finger-box clearance, physics
+  checkpoints and open-loop B0 construction. Acceptance: 27 tests pass; both
+  left-to-right and right-to-left build 12-brick walls. Measured maximum final
+  errors: 3.67 mm and 1.46 mm respectively. A clearance test passes only one order.
+- M4–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -57,5 +61,10 @@ Diamond uses a normalized Manhattan-distance shape; stripe uses a centred interv
 Gradient/random openings use seeded Bernoulli sampling; checker further restricts
 the alternating parity cells. Geometry may reject artistic requests when they
 create unsupported bricks; the compiler does not silently fill openings.
+
+`python scripts/demo.py --milestone 3 --no-video` runs both B0 orders. Final descent
+and retreat use sampled Cartesian vertical lines; joint interpolation alone can
+sweep a carried brick sideways into an adjacent brick. Drop tests measure motion
+over a finite settling period, not a proof of structural safety under future loads.
 
 This is simulation research software. It is not a certified controller for hardware.
