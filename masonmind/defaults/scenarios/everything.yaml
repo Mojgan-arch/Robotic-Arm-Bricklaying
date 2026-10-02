@@ -1,0 +1,9 @@
+{
+  "material_shortage_at_course": 2,
+  "placement_noise_deg": 3.0,
+  "obstacle": "moving",
+  "p_broken": 0.1,
+  "p_drop": 0.1,
+  "placement_noise_mm": 4.0,
+  "user_change_at_course": null
+}

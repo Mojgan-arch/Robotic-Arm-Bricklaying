@@ -1,0 +1,73 @@
+seed: 7
+geometry:
+  brick_size: [0.054, 0.026, 0.016]
+  pitch: 0.055
+  origin: [0.48, 0.0, 0.04]
+  yaw_limit_deg: 45.0
+  max_length: 0.80
+  max_height: 0.25
+  workspace_radius: 0.80
+  min_support_ratio: 0.50
+  overlap_tolerance_m2: 0.0000001
+  support_epsilon: 0.000001
+sim:
+  gui: false
+  dt: 0.004166666666666667
+  gravity: -9.81
+  brick_mass: 0.035
+  friction: 0.9
+  settle_steps: 120
+  stability_steps: 240
+  stability_translation_m: 0.004
+  stability_angle_deg: 5.0
+  supply: [0.35, -0.30, 0.048]
+  discard: [0.25, -0.4, 0.048]
+  table_center: [0.5, 0.0, 0.02]
+  table_size: [0.8, 1.0, 0.04]
+  home: [0.0, -0.45, 0.0, -2.30, 0.0, 1.85, 0.78]
+  grasp_offset: 0.035
+  approach_height: 0.10
+  ik_tolerance: 0.008
+  motor_force: 120.0
+  camera_width: 640
+  camera_height: 480
+  camera_eye: [1.0, -0.8, 0.85]
+  camera_target: [0.45, 0.0, 0.09]
+  camera_near: 0.02
+  camera_far: 2.5
+  camera_fov: 55
+  video_fps: 24
+planning:
+  step_size: 0.18
+  edge_resolution: 0.035
+  max_iterations: 3000
+  timeout_s: 8.0
+  smoothing_iterations: 60
+  velocity: 0.8
+  acceleration: 1.5
+  safety_margin: 0.001
+  d_slow: 0.10
+  d_stop: 0.035
+  replan_timeout_s: 12.0
+  control_dt: 0.016666666666666666
+sequence:
+  checkpoint_every: 8
+  finger_thickness: 0.008
+  finger_length: 0.022
+  finger_gap: 0.028
+  approach_height: 0.10
+scan:
+  translation_tolerance_mm: 3.0
+  yaw_tolerance_deg: 2.0
+  depth_noise_m: 0.0
+  cluster_radius: 0.018
+  min_cluster_points: 8
+  icp_max_distance: 0.025
+  icp_iterations: 80
+agents:
+  max_rounds: 5
+  validation_retries: 3
+memory:
+  enabled: true
+  path: memory/rules.jsonl
+  max_rules: 8

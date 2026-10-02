@@ -1,0 +1,14 @@
+.venv/
+.venv311/
+.python/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+runs/
+.cache/
+memory/rules.jsonl
+experiments/results.csv
+experiments/figures/
+.env

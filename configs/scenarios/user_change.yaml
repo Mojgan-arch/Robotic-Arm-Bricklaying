@@ -1,0 +1,10 @@
+{
+  "material_shortage_at_course": null,
+  "placement_noise_deg": 0.0,
+  "obstacle": null,
+  "p_broken": 0.0,
+  "user_change_text": "Reduce ventilation in remaining courses",
+  "p_drop": 0.0,
+  "placement_noise_mm": 0.0,
+  "user_change_at_course": 1
+}
