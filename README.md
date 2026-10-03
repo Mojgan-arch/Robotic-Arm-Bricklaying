@@ -61,7 +61,11 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   Full moving-obstacle run: 12 bricks, 1 stop, 1 successful replan, zero obstacle
   contact ticks. Blocking run: supervisor WAIT after timed-out replanning,
   completion with zero obstacle contact ticks. Noise comparison is recorded below.
-- M8–M10: pending implementation and acceptance runs.
+- M8: VLM Critic with image inputs and explicit mock-score labelling; append-only
+  memory with evidence, confirmation counts, keyword/confidence/recency retrieval.
+  Acceptance: 46 tests pass; noisy-placement incidents write rules, and a subsequent
+  Architect call includes a previously stored rule in its audited prompt.
+- M9–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -163,5 +167,19 @@ conformance is the relevant improvement. Keep these metrics distinct.
 Noisy-placement comparison (seed 7): B0 mean/max final displacement **7.332 /
 17.696 mm**, with a course-height loss detected; closed loop **0.444 / 2.710 mm**,
 completed after three REPOSITION decisions, zero obstacle contacts.
+
+## Memory and critique
+
+Memory is enabled only in B3 construction (and configurable in standalone Phase A).
+Example rule written after an actual correction:
+
+> Inspect each completed course and correct measured placement errors before adding load.
+
+Its record includes `run_id`, `course`, `brick_ids`, `confidence: 0.6`, and an
+increasing `times_confirmed`. Later Architect, Strategist, StructuralEngineer and
+Supervisor inputs contain a `memory_rules` list; inspect `llm_log.jsonl` to audit it.
+Set `memory.enabled: false` to disable both reading and writing.
+The mock critic always returns 7/10 with an explicit fixture warning. This checks
+the integration and cannot support a scientific claim about design intent.
 
 This is simulation research software. It is not a certified controller for hardware.

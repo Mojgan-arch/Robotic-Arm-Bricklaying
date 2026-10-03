@@ -26,6 +26,8 @@ class Orchestrator:
         self.repair_rounds = 0
         self.brief = ""
         self.memory_rules: list = []
+        from masonmind.memory import MemoryStore
+        self.memory = MemoryStore(self.config["memory"])
         save_json(self.run / "config.json", {"physics": self.config, "llm": self.llm_config})
 
     def agent(self, role: type[agents.Agent]) -> agents.Agent:
@@ -58,6 +60,7 @@ class Orchestrator:
         """Clarify, generate, verify, repair, sequence, review and export a design."""
         clarification = self.agent(agents.Clarifier).decide({"user_text": user_text})
         self.brief = clarification.brief
+        self.memory_rules = self.memory.retrieve(self.brief)
         if clarification.questions:
             if self.ask_user is None:
                 save_json(self.run / "questions.json", clarification)
@@ -141,6 +144,8 @@ class BuildSession:
         self.handled_course_events: set[tuple] = set()
         self.collisions = 0
         self.failure: str | None = None
+        self.critic_scores: list[float] = []
+        self.memory_index = 0
 
     def observe(self) -> list[int]:
         """Detect unknown objects from depth and update query-only geometry."""
@@ -183,14 +188,17 @@ class BuildSession:
 
     def supervisor(self, **evidence) -> SupervisorDecision:
         """Invoke a validated decision with measured evidence and current stock."""
+        course = evidence.pop("course", -1)
         decision = self.owner.agent(agents.SiteSupervisor).decide({
-            "course": evidence.pop("course", -1), "remaining_program": self.design.program,
+            "course": course, "remaining_program": self.design.program,
             "supply_count": self.stock, "memory_rules": self.owner.memory_rules,
             "motion_events": [] if self.controller is None else self.controller.events[-8:], **evidence})
         from masonmind.io import append_json
         append_json(self.run / "decisions.jsonl", decision)
         self.decisions.append(decision)
         self.interventions[decision.action] = self.interventions.get(decision.action, 0) + 1
+        if decision.action != "ACCEPT":
+            self.incidents.append({"course": course, "action": decision.action, "brick_ids": decision.brick_ids})
         return decision
 
     def supervised_plan(self, start, goal):
@@ -353,12 +361,35 @@ class BuildSession:
                 break
             decision = self.supervisor(course=course, deviations=scan.deviations, broken_ids=scan.broken_ids)
             self.apply_decision(decision)
-            self.incidents.append({"course": course, "action": decision.action, "brick_ids": decision.brick_ids})
             if decision.action == "ACCEPT":
                 break
             scan = self.scan(bricks)
         else:
             raise RuntimeError(f"Course {course} still outside tolerance after intervention budget")
+        self.review_course(course, scan)
+
+    def review_course(self, course: int, scan) -> None:
+        """Critique visible intent and retain lessons only with measured outcomes."""
+        from masonmind.io import append_json
+        folder = self.latest_scan_folder
+        critic = self.owner.agent(agents.VLMCritic).decide(
+            {"brief": self.owner.brief, "course": course, "deviations": scan.deviations},
+            images=[(folder / "rgb.png").read_bytes(), (folder / "heatmap.png").read_bytes()])
+        self.critic_scores.append(critic.intent_match_score)
+        append_json(self.run / "critic.jsonl", {"course": course, **critic.model_dump(),
+                    "mock_fixture": self.owner.llm_config["provider"] == "mock"})
+        if self.variant == "B3" and self.owner.memory.enabled:
+            for incident in self.incidents[self.memory_index:]:
+                outcome = {"all_observed_within_tolerance": all(d.within_tolerance for d in scan.deviations),
+                           "scan": scan.deviations}
+                output = self.owner.agent(agents.MemoryKeeper).decide({"incident": incident, "outcome": outcome,
+                    "run_id": self.run.name, "course": course, "brick_ids": incident["brick_ids"]})
+                for rule in output.rules:
+                    # The evidence identifiers come from the run, not model invention.
+                    rule.run_id, rule.course = self.run.name, course
+                    self.owner.memory.add(rule)
+            self.memory_index = len(self.incidents)
+            self.owner.memory_rules = self.owner.memory.retrieve(self.owner.brief)
 
     def run_build(self) -> BuildReport:
         """Own resources and write a report even if construction cannot complete."""
@@ -409,6 +440,9 @@ class BuildSession:
                     if not any(b.course == brick.course and b.id in self.remaining for b in self.design.bricks):
                         self.after_course(brick.course)
                 self.scan([b for b in self.design.bricks if b.id in self.done])
+                if self.variant == "B0":
+                    # Evaluation-only VLM scoring after the open-loop build is over.
+                    self.review_course(-1, self.latest_scan)
             except (RuntimeError, ValueError) as error:
                 self.failure = str(error)
                 save_json(self.run / "failure.json", {"error": str(error), "phase": self.arm.phase, "remaining": self.remaining})
@@ -434,6 +468,9 @@ class BuildSession:
                 "mean_geometry_deviation_mm": float(np.mean(geometry_errors)) if geometry_errors else None,
                 "collapsed": bool(collapsed),
                 "repair_rounds": self.owner.repair_rounds, "simulation_time_s": world.t,
+                "intent_match_score": self.critic_scores[-1] if self.critic_scores else None,
+                "critic_is_mock": self.owner.llm_config["provider"] == "mock",
+                "memory_rules": len(self.owner.memory.rules()) if self.variant == "B3" else 0,
                 "slowdowns": sum(e.kind == "slowdown" for e in events), "stops": sum(e.kind == "stop" for e in events),
                 "replans": sum(e.kind == "replan_ok" for e in events), "replan_failures": sum(e.kind == "replan_failed" for e in events),
                 "path_length_rad": None if self.controller is None else self.controller.path_length,

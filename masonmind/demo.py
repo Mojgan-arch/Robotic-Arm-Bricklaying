@@ -34,6 +34,7 @@ def run_demo(args: Namespace) -> None:
         from masonmind.orchestrator import Orchestrator
         cfg = load_config()
         cfg["seed"], cfg["sim"]["gui"] = args.seed, args.gui
+        cfg["memory"]["enabled"] = args.variant == "B3"
         orchestrator = Orchestrator(cfg)
         design, sequence = orchestrator.run_phase_a(args.text)
         report = orchestrator.run_phase_b(design, sequence, args.scenario, args.variant, not args.no_video)
