@@ -19,6 +19,9 @@ class Panda:
         self.hold_transform: tuple | None = None
         self.phase = "idle"
         self.pick_body: int | None = None
+        self.release_hook: Callable[[int], None] | None = None
+        self.drop_early = False
+        self.orientation_override: tuple | None = None
         self.plan: Callable[[np.ndarray, np.ndarray], list[np.ndarray]] | None = None
         self.execute: Callable[[list[np.ndarray]], None] | None = None
         info = [p.getJointInfo(self.body, j, physicsClientId=world.cid) for j in self.joints]
@@ -52,7 +55,7 @@ class Panda:
 
     def ik(self, position: list[float], yaw_deg: float = 0) -> np.ndarray:
         """Solve and validate Cartesian IK without changing the live state."""
-        orientation = p.getQuaternionFromEuler([np.pi, 0, np.deg2rad(yaw_deg)])
+        orientation = self.orientation_override or p.getQuaternionFromEuler([np.pi, 0, np.deg2rad(yaw_deg)])
         saved = [p.getJointState(self.body, j, physicsClientId=self.world.cid)[:2] for j in self.joints]
         result = None
         try:
@@ -125,9 +128,13 @@ class Panda:
         if self.constraint is None:
             raise RuntimeError("Cannot release: gripper is empty")
         p.removeConstraint(self.constraint, physicsClientId=self.world.cid)
+        released_body = self.held
         self.constraint = self.held = self.hold_transform = None
         self.fingers(0.04)
         self.world.step(self.world.sim["settle_steps"])
+        if self.release_hook:
+            self.release_hook(released_body)
+            self.world.step(self.world.sim["settle_steps"])
 
     def pick_place(self, body: int, source: list[float], target: list[float], yaw_deg: float = 0,
                    source_yaw_deg: float = 0) -> None:
@@ -137,15 +144,26 @@ class Panda:
         pick = np.asarray(source, dtype=float) + [0, 0, offset]
         place = np.asarray(target, dtype=float) + [0, 0, offset]
         self.pick_body = body
+        self.orientation_override = None
         self.phase = "approach"
         self.fingers(0.04)
         self.move((pick + [0, 0, height]).tolist(), source_yaw_deg)
         self.phase = "pick"
         self.vertical_move(pick.tolist(), source_yaw_deg)
         self.grasp(body)
+        desired = p.getQuaternionFromEuler([0, 0, np.deg2rad(yaw_deg)])
+        parent_position, parent_orientation = p.multiplyTransforms(target, desired, *p.invertTransform(*self.hold_transform))
         self.phase = "lift"
         self.vertical_move((pick + [0, 0, height]).tolist(), source_yaw_deg)
+        if self.drop_early:
+            self.release()
+            self.drop_early = False
+            self.phase = "idle"
+            self.pick_body = None
+            return
         self.phase = "transfer"
+        place = np.asarray(parent_position)
+        self.orientation_override = parent_orientation
         self.move((place + [0, 0, height]).tolist(), yaw_deg)
         self.phase = "place"
         self.vertical_move(place.tolist(), yaw_deg)

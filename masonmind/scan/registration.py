@@ -54,8 +54,11 @@ def scan_bricks(frames: list[Frame], bricks: list[Brick], instance_ids: dict[str
             continue
         observed = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
         model = model_cloud(brick, size, cfg["model_spacing_m"])
+        initial = np.eye(4)
+        if np.linalg.norm(np.median(points, axis=0) - [brick.x, brick.y, brick.z]) > cfg["icp_max_distance"]:
+            initial[:3, 3] = np.array([brick.x, brick.y, brick.z]) - (points.max(axis=0) + points.min(axis=0)) / 2
         registration = o3d.pipelines.registration.registration_icp(observed, model, cfg["icp_max_distance"],
-            np.eye(4), o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+            initial, o3d.pipelines.registration.TransformationEstimationPointToPlane(),
             o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=cfg["icp_iterations"]))
         transform = np.linalg.inv(registration.transformation)
         nominal = np.array([brick.x, brick.y, brick.z, 1])
@@ -70,6 +73,11 @@ def scan_bricks(frames: list[Frame], bricks: list[Brick], instance_ids: dict[str
         damaged = length < cfg["broken_length_ratio"] * size[0]
         if damaged:
             broken.append(brick.id)
+            # A short observed box cannot share the nominal full-length ICP centre.
+            # Recenter from observed oriented bounds for a sensor-based replacement grasp.
+            position[:2] += ((local.max(axis=0) + local.min(axis=0)) / 2) @ rotation.T
+            position[2] = float(np.max(points[:, 2]) - size[2] / 2)
+            delta = (position - nominal[:3]) * 1000
         reliable = registration.fitness >= cfg["icp_min_fitness"]
         good = reliable and not damaged and np.linalg.norm(delta) <= cfg["translation_tolerance_mm"] and abs(dyaw) <= cfg["yaw_tolerance_deg"]
         deviations.append(BrickDeviation(brick_id=brick.id, dx_mm=float(delta[0]), dy_mm=float(delta[1]), dz_mm=float(delta[2]),

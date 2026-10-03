@@ -33,7 +33,7 @@ class StaticController:
         self.durations.append(elapsed)
         self.path_length += sum(float(np.linalg.norm(b - a)) for a, b in zip(path, path[1:]))
         if self.log_path:
-            append_json(self.log_path, {"kind": "plan", "duration_s": elapsed, "waypoints": len(path), "phase": self.arm.phase})
+            append_json(self.log_path, {"kind": "plan", "duration_s": elapsed, "waypoints": len(path), "phase": self.arm.phase, "simulation_t": self.arm.world.t})
         return path
 
     def execute(self, path: list[np.ndarray]) -> None:

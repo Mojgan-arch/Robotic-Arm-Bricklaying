@@ -17,10 +17,10 @@ class Frame:
 class Camera:
     """A calibrated virtual camera with seeded sensor noise."""
 
-    def __init__(self, world: World, eye: list[float] | None = None):
+    def __init__(self, world: World, eye: list[float] | None = None, resolution: tuple[int, int] | None = None):
         self.world = world
         cfg = world.sim
-        self.width, self.height = cfg["camera_width"], cfg["camera_height"]
+        self.width, self.height = resolution or (cfg["camera_width"], cfg["camera_height"])
         self.view = p.computeViewMatrix(eye or cfg["camera_eye"], cfg["camera_target"], [0, 0, 1])
         self.projection = p.computeProjectionMatrixFOV(cfg["camera_fov"], self.width / self.height,
                                                        cfg["camera_near"], cfg["camera_far"])

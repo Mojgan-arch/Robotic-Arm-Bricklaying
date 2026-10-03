@@ -55,7 +55,13 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   Acceptance: 37 tests pass; noisy six-brick course mean scan error **0.027 mm /
   0.014 degrees** with ideal depth. The padded perceived obstacle box encloses
   the known test obstacle. These are synthetic-sensor results, not real-camera claims.
-- M7–M10: pending implementation and acceptance runs.
+- M7: monitored execution, speed zones, stop/replan/escalation, scripted obstacles,
+  release noise/drop/damaged stock, stock and brief events, all seven supervisor
+  actions. 44 offline tests pass, including physical reposition/replacement.
+  Full moving-obstacle run: 12 bricks, 1 stop, 1 successful replan, zero obstacle
+  contact ticks. Blocking run: supervisor WAIT after timed-out replanning,
+  completion with zero obstacle contact ticks. Noise comparison is recorded below.
+- M8–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -122,5 +128,40 @@ Missing means **unobserved**, which can also mean occluded. Obstacle bounds cove
 observed surfaces with configurable padding, not all possible hidden geometry.
 TinyRenderer's integer-X / inverted-Y pixel convention is tested by calibrated
 boxes; using a generic pixel-centre offset introduces millimetre-scale bias.
+
+## Closed-loop construction
+
+```powershell
+python scripts/demo.py --milestone 7 --scenario moving_obstacle --no-video
+python scripts/demo.py --milestone 7 --scenario blocking_obstacle --no-video
+python scripts/demo.py --milestone 7 --scenario noisy_placement --variant B0 --no-video
+```
+
+Control uses invisible collision proxies made from design/scan poses and perceived
+obstacle bounds. Ground-truth poses are read only by simulation mechanics and
+separate evaluation. Every course scan includes the entire built structure.
+Loaded bricks cannot be extracted until their dependents are addressed; such an
+unsafe requested correction fails explicitly. New programs preserve built courses
+and must pass geometry, sequence and drop checks before continuing.
+Batch user responses are explicit configuration entries and are recorded. Supply
+shortage uses `replenish`; a changed brief uses `keep_current_design` by default.
+Pass an `ask_user` callback to Orchestrator for real interaction or revised DSL.
+
+The low-scale contact model uses configurable damping, friction anchors and small
+collision margins to prevent numerical drift of 54 mm bricks. During vertical
+extraction, fitted brick proxies allow 0.2 mm contact uncertainty; this exception
+never applies to unknown obstacles. An approaching obstacle may continue closer
+after the arm stops: observed minimum clearance was about 11 mm in the scripted
+test, despite the 50 mm stop trigger. This is not a physical safety guarantee.
+
+Broken-stock comparison (seed 1): the B0 mean pose error is 0.025 mm, but its
+mean geometry deviation including size mismatch is 2.046 mm. Replacement removes
+the damaged stock; the closed-loop pose error was 0.027 mm. There is **no measured
+improvement in pose-centre error** for this particular broken-stock seed; shape
+conformance is the relevant improvement. Keep these metrics distinct.
+
+Noisy-placement comparison (seed 7): B0 mean/max final displacement **7.332 /
+17.696 mm**, with a course-height loss detected; closed loop **0.444 / 2.710 mm**,
+completed after three REPOSITION decisions, zero obstacle contacts.
 
 This is simulation research software. It is not a certified controller for hardware.

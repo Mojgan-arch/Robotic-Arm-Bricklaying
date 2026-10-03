@@ -16,6 +16,9 @@ sim:
   gravity: -9.81
   brick_mass: 0.035
   friction: 0.9
+  linear_damping: 0.9
+  angular_damping: 0.9
+  collision_margin_m: 0.0001
   settle_steps: 120
   stability_steps: 240
   stability_translation_m: 0.004
@@ -47,11 +50,12 @@ planning:
   velocity: 0.8
   acceleration: 1.5
   safety_margin: 0.001
-  contact_penetration_m: 0.0005
+  contact_penetration_m: 0.0015
+  proxy_fit_uncertainty_m: 0.0002
   static_obstacle_size: [0.07, 0.05, 0.10]
   static_obstacle_position: [0.44, -0.16, 0.09]
   d_slow: 0.10
-  d_stop: 0.035
+  d_stop: 0.05
   replan_timeout_s: 12.0
   control_dt: 0.016666666666666666
 sequence:
@@ -69,6 +73,8 @@ scan:
   broken_length_ratio: 0.75
   icp_min_fitness: 0.6
   perception_interval_s: 0.25
+  monitor_width: 160
+  monitor_height: 120
   translation_tolerance_mm: 3.0
   yaw_tolerance_deg: 2.0
   depth_noise_m: 0.0
@@ -79,6 +85,21 @@ scan:
 agents:
   max_rounds: 5
   validation_retries: 3
+construction:
+  max_interventions_per_course: 4
+  max_motion_retries: 4
+  initial_stock: 256
+  batch_answers:
+    shortage: replenish
+    user_change: keep_current_design
+  obstacle_start_s: 12.0
+  obstacle_travel_s: 1.5
+  obstacle_dwell_s: 5.0
+  blocking_dwell_s: 20.0
+  obstacle_size: [0.06, 0.06, 0.10]
+  obstacle_start: [0.70, -0.15, 0.18]
+  obstacle_end: [0.46, -0.15, 0.18]
+  broken_length_scale: 0.55
 memory:
   enabled: true
   path: memory/rules.jsonl

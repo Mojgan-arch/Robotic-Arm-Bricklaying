@@ -29,7 +29,7 @@ class MockClient:
         elif agent == "Coordinator":
             result = {"approved": all(r["approved"] for r in data["reviews"]), "feedback": []}
         elif agent == "SiteSupervisor":
-            missing = [d["brick_id"] for d in data.get("deviations", []) if d["missing"]]
+            missing = list(dict.fromkeys([d["brick_id"] for d in data.get("deviations", []) if d["missing"]] + data.get("broken_ids", [])))
             wrong = [d["brick_id"] for d in data.get("deviations", []) if not d["within_tolerance"]]
             result = {"action": "REPLACE" if missing else "REPOSITION" if wrong else "ACCEPT",
                       "brick_ids": missing or wrong, "reasoning": "Act on measured deviations."}

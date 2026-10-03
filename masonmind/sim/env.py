@@ -40,6 +40,8 @@ class World:
         body = p.createMultiBody(mass, collision, visual, position,
                                 p.getQuaternionFromEuler([0, 0, np.deg2rad(yaw_deg)]), physicsClientId=self.cid)
         p.changeDynamics(body, -1, lateralFriction=self.sim["friction"], restitution=0,
+                         linearDamping=self.sim["linear_damping"], angularDamping=self.sim["angular_damping"],
+                         collisionMargin=self.sim["collision_margin_m"], frictionAnchor=1,
                          physicsClientId=self.cid)
         return body
 

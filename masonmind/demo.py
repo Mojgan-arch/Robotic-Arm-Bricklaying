@@ -30,6 +30,18 @@ def run_demo(args: Namespace) -> None:
     if args.milestone == 6:
         perception_demo(args)
         return
+    if args.milestone >= 7:
+        from masonmind.orchestrator import Orchestrator
+        cfg = load_config()
+        cfg["seed"], cfg["sim"]["gui"] = args.seed, args.gui
+        orchestrator = Orchestrator(cfg)
+        design, sequence = orchestrator.run_phase_a(args.text)
+        report = orchestrator.run_phase_b(design, sequence, args.scenario, args.variant, not args.no_video)
+        print(report.model_dump_json(indent=2))
+        print(f"Run: {orchestrator.run.resolve()}")
+        if not report.completed:
+            raise SystemExit(1)
+        return
     if args.milestone != 1:
         raise ValueError("Only milestone 1 is implemented at this development stage")
     config = load_config()

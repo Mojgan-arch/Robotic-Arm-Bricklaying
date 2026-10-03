@@ -18,17 +18,22 @@ class CollisionChecker:
         self.margin = self.world.config["planning"]["safety_margin"]
         self.parents = {j: p.getJointInfo(arm.body, j, physicsClientId=self.world.cid)[16]
                         for j in range(p.getNumJoints(arm.body, physicsClientId=self.world.cid))}
+        self.joint_types = {j: p.getJointInfo(arm.body, j, physicsClientId=self.world.cid)[2] for j in self.parents}
         self.last_collision: str | None = None
 
     def adjacent(self, a: int, b: int) -> bool:
         """Exclude adjacent links and links separated only by short fixed chains."""
-        def ancestors(link: int) -> set[int]:
-            result = {link}
-            for _ in range(3):
-                link = self.parents.get(link, -2)
-                result.add(link)
-            return result
-        return a in ancestors(b) or b in ancestors(a) or {a, b} <= {8, 9, 10, 11}
+        def connected(child: int, ancestor: int) -> bool:
+            movable = 0
+            while child in self.parents:
+                movable += self.joint_types[child] != p.JOINT_FIXED
+                child = self.parents[child]
+                if child == ancestor:
+                    return movable <= 1
+                if movable > 1:
+                    return False
+            return False
+        return connected(a, b) or connected(b, a) or {a, b} <= {8, 9, 10, 11}
 
     def __call__(self, q: np.ndarray) -> bool:
         """Return True only for an admissible collision-free configuration."""
@@ -69,8 +74,12 @@ class CollisionChecker:
                         permitted = (obstacle in self.support_bodies and arm.phase in {"lift", "place"}
                                      and contact[8] >= -self.world.config["planning"]["contact_penetration_m"]
                                      and contact[7][2] > 0.9)
+                        # A vertical extraction may start inside the clearance margin
+                        # next to a misplaced neighbour, but never through penetration.
+                        permitted |= (obstacle in self.support_bodies and arm.phase == "lift"
+                                      and contact[8] >= -self.world.config["planning"]["proxy_fit_uncertainty_m"])
                         if not permitted:
-                            self.last_collision = f"held brick/scene body {obstacle}"
+                            self.last_collision = f"held brick/scene body {obstacle}, gap={contact[8]:.6f}, normal={contact[7]}, support={obstacle in self.support_bodies}"
                             return False
             self.last_collision = None
             return True
