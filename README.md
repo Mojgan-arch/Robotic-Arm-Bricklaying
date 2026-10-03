@@ -46,7 +46,11 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   both 12-brick builds report zero contact ticks with the fixed obstacle.
   First acceptance run: mean planning time 3.8 ms, worst query 264 ms; maximum
   placement errors 6.66 / 4.33 mm (not yet corrected by perception).
-- M5–M10: pending implementation and acceptance runs.
+- M5: bounded multi-agent Phase A, audited providers, output validation/retries,
+  content-addressed cache, IFC4 export. Acceptance: 35 offline tests pass; mock
+  repairs one deliberately unsupported program, approves 12 bricks, and exports
+  an IFC with one geometric element and order property per brick.
+- M6–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -79,5 +83,27 @@ continuous-time certified. Intended finger-grasp and upward supporting contacts
 are permitted only during relevant approach/lift/place phases with a penetration
 limit; other known objects remain collision geometry. Motor tracking and physics
 still produce placement error, which must be measured rather than assumed zero.
+
+## Agents and providers
+
+`python scripts/demo.py --milestone 5 --text "A three-course wall"` runs Phase A.
+MockClient is an integration fixture, not a language interpreter: it returns a
+small stable wall and deliberately triggers one geometric repair. Real text-to-DSL
+generation requires changing `provider` and `model` in `configs/llm.yaml`. Use
+`openai` with `OPENAI_API_KEY`, `anthropic` with `ANTHROPIC_API_KEY`, or `ollama`
+with a local server URL. No paid API calls were made during development.
+Live-provider transports are implemented but require a configured compatible
+model and have not been acceptance-tested against paid endpoints.
+
+Provider references: [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
+[Anthropic Messages](https://platform.claude.com/docs/en/api/messages/create),
+[Ollama chat](https://docs.ollama.com/api/chat). Every response is validated locally;
+an invalid response gets three repair retries. Cache keys include model, provider,
+endpoint, prompt, schema and image hashes. `llm_log.jsonl` includes all attempts,
+responses, validation errors, latency and available token usage, never credentials.
+
+Phase A robot review currently checks target IK and empty-scene approach planning;
+carried-object paths through the evolving scene are checked at construction time.
+An agent cannot override a failed deterministic check.
 
 This is simulation research software. It is not a certified controller for hardware.

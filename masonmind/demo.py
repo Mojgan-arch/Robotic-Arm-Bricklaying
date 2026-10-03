@@ -19,6 +19,14 @@ def run_demo(args: Namespace) -> None:
     if args.milestone in (3, 4):
         baseline_demo(args)
         return
+    if args.milestone == 5:
+        from masonmind.orchestrator import Orchestrator
+        config = load_config()
+        config["seed"] = args.seed
+        orchestrator = Orchestrator(config=config, ask_user=input)
+        design, sequence = orchestrator.run_phase_a(args.text)
+        print(f"Approved {len(sequence.order)} bricks after {orchestrator.repair_rounds} repairs: {orchestrator.run.resolve()}")
+        return
     if args.milestone != 1:
         raise ValueError("Only milestone 1 is implemented at this development stage")
     config = load_config()
