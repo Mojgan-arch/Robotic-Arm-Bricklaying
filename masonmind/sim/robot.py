@@ -17,6 +17,8 @@ class Panda:
         self.constraint: int | None = None
         self.held: int | None = None
         self.hold_transform: tuple | None = None
+        self.phase = "idle"
+        self.pick_body: int | None = None
         self.plan: Callable[[np.ndarray, np.ndarray], list[np.ndarray]] | None = None
         self.execute: Callable[[list[np.ndarray]], None] | None = None
         info = [p.getJointInfo(self.body, j, physicsClientId=world.cid) for j in self.joints]
@@ -134,12 +136,21 @@ class Panda:
         height = self.world.sim["approach_height"]
         pick = np.asarray(source, dtype=float) + [0, 0, offset]
         place = np.asarray(target, dtype=float) + [0, 0, offset]
+        self.pick_body = body
+        self.phase = "approach"
         self.fingers(0.04)
         self.move((pick + [0, 0, height]).tolist(), source_yaw_deg)
+        self.phase = "pick"
         self.vertical_move(pick.tolist(), source_yaw_deg)
         self.grasp(body)
+        self.phase = "lift"
         self.vertical_move((pick + [0, 0, height]).tolist(), source_yaw_deg)
+        self.phase = "transfer"
         self.move((place + [0, 0, height]).tolist(), yaw_deg)
+        self.phase = "place"
         self.vertical_move(place.tolist(), yaw_deg)
         self.release()
+        self.phase = "retreat"
         self.vertical_move((place + [0, 0, height]).tolist(), yaw_deg)
+        self.phase = "idle"
+        self.pick_body = None

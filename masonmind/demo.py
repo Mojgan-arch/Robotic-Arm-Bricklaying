@@ -16,7 +16,7 @@ def run_demo(args: Namespace) -> None:
     if args.milestone == 2:
         design_demo(args)
         return
-    if args.milestone == 3:
+    if args.milestone in (3, 4):
         baseline_demo(args)
         return
     if args.milestone != 1:
@@ -98,14 +98,34 @@ def baseline_demo(args: Namespace) -> None:
         save_json(run / "sequence.json", sequence)
         with World(config) as world:
             arm = Panda(world)
+            controller = None
+            collision_count = [0]
+            if args.milestone == 4:
+                from masonmind.planning.collision import CollisionChecker
+                from masonmind.planning.controller import StaticController
+                obstacle = world.box(config["planning"]["static_obstacle_size"], config["planning"]["static_obstacle_position"], color=(.2, .5, .7, 1))
+                checker = CollisionChecker(arm, [world.table, obstacle])
+                controller = StaticController(checker, run / "planning.jsonl")
+                arm.plan, arm.execute = controller.plan, controller.execute
+                def audit() -> None:
+                    bodies = [arm.body] + ([] if arm.held is None else [arm.held])
+                    if any(p.getContactPoints(b, obstacle, physicsClientId=world.cid) for b in bodies):
+                        collision_count[0] += 1
+                world.on_step.append(audit)
             by_id = {b.id: b for b in design.bricks}
             for name_id in sequence.order:
                 brick = by_id[name_id]
                 body = world.spawn_brick(name_id)
+                if controller:
+                    checker.scene.append(body)
                 world.step(config["sim"]["settle_steps"])
                 arm.pick_place(body, config["sim"]["supply"], [brick.x, brick.y, brick.z], brick.yaw_deg)
+                if controller:
+                    checker.support_bodies.add(body)
             Image.fromarray(Camera(world).capture(unproject=False).rgb).save(run / "final.png")
             errors = {b.id: float(np.linalg.norm(np.array(p.getBasePositionAndOrientation(world.bricks[b.id], physicsClientId=world.cid)[0]) -
                                                 [b.x, b.y, b.z]) * 1000) for b in design.bricks}
-            save_json(run / "report.json", {"variant": "B0", "strategy": name, "placement_error_mm": errors})
+            save_json(run / "report.json", {"variant": "B0" if not controller else "static_planner", "strategy": name,
+                "placement_error_mm": errors, "obstacle_contact_ticks": collision_count[0],
+                "planning_time_s": None if not controller else controller.durations})
         print(f"Built {name}: {run.resolve()}")

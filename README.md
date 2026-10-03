@@ -41,7 +41,12 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   checkpoints and open-loop B0 construction. Acceptance: 27 tests pass; both
   left-to-right and right-to-left build 12-brick walls. Measured maximum final
   errors: 3.67 mm and 1.46 mm respectively. A clearance test passes only one order.
-- M4–M10: pending implementation and acceptance runs.
+- M4: seven-joint RRT-Connect, shortcut smoothing, trapezoidal joint profiles,
+  robot/scene/self/held-brick collision checking. Acceptance: 32 tests pass;
+  both 12-brick builds report zero contact ticks with the fixed obstacle.
+  First acceptance run: mean planning time 3.8 ms, worst query 264 ms; maximum
+  placement errors 6.66 / 4.33 mm (not yet corrected by perception).
+- M5–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -66,5 +71,13 @@ create unsupported bricks; the compiler does not silently fill openings.
 and retreat use sampled Cartesian vertical lines; joint interpolation alone can
 sweep a carried brick sideways into an adjacent brick. Drop tests measure motion
 over a finite settling period, not a proof of structural safety under future loads.
+
+`python scripts/demo.py --milestone 4 --no-video` adds a fixed obstacle and reports
+planning times and obstacle contact ticks. Default pitch is now 62 mm, leaving
+clearance around 54 mm bricks. Collision paths are discretely sampled, not
+continuous-time certified. Intended finger-grasp and upward supporting contacts
+are permitted only during relevant approach/lift/place phases with a penetration
+limit; other known objects remain collision geometry. Motor tracking and physics
+still produce placement error, which must be measured rather than assumed zero.
 
 This is simulation research software. It is not a certified controller for hardware.
