@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from masonmind.schemas import DesignProgram, SupervisorDecision, Region, ArchitectOutput
 from masonmind.llm.mock import MockClient
 from masonmind.schemas import (ClarifierOutput, SequenceStrategy, StructuralReview,
-    ReachabilityReview, CoordinatorDecision, SupervisorDecision, CriticReview, MemoryOutput)
+    ReachabilityReview, CoordinatorDecision, CriticReview, MemoryOutput)
 
 
 def test_program_rejects_coordinates():

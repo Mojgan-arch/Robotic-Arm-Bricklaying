@@ -9,7 +9,7 @@ from masonmind.sim.camera import Camera
 class Recorder:
     """Capture frames at simulated-time intervals; encode on close."""
 
-    def __init__(self, camera: Camera, path: Path):
+    def __init__(self, camera: Camera, path: Path) -> None:
         self.camera = camera
         self.fps = camera.world.sim["video_fps"]
         path.parent.mkdir(parents=True, exist_ok=True)

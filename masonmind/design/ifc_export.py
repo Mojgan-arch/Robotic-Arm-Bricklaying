@@ -16,7 +16,7 @@ def export_ifc(design: Design, sequence: AssemblySequence, path: Path, config: d
         return None
     file = ifcopenshell.file(schema="IFC4")
     guid = ifcopenshell.guid.new
-    def axis(position: tuple, yaw: float = 0):
+    def axis(position: tuple, yaw: float = 0) -> "ifcopenshell.entity_instance":
         return file.create_entity("IfcAxis2Placement3D", Location=file.create_entity("IfcCartesianPoint", Coordinates=tuple(float(v) for v in position)),
             Axis=file.create_entity("IfcDirection", DirectionRatios=(0., 0., 1.)),
             RefDirection=file.create_entity("IfcDirection", DirectionRatios=(math.cos(yaw), math.sin(yaw), 0.)))

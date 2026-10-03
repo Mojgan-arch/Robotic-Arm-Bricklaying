@@ -1,8 +1,12 @@
 """Per-brick ICP using only visible depth samples and nominal BIM geometry."""
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 import numpy as np
 from masonmind.schemas import Brick, BrickDeviation
 from masonmind.sim.camera import Frame
+
+if TYPE_CHECKING:
+    import open3d as o3d
 
 
 @dataclass
@@ -13,7 +17,7 @@ class ScanResult:
     diagnostics: dict
 
 
-def model_cloud(brick: Brick, size: list[float], spacing: float):
+def model_cloud(brick: Brick, size: list[float], spacing: float) -> "o3d.geometry.PointCloud":
     """Deterministically sample all six faces, retaining analytic face normals."""
     import open3d as o3d
     points, normals = [], []

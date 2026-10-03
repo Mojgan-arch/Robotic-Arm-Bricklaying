@@ -7,7 +7,7 @@ from masonmind.sim.env import World
 class Disturbances:
     """Inject controlled errors independently from planning and agent evidence."""
 
-    def __init__(self, world: World, scenario: dict):
+    def __init__(self, world: World, scenario: dict) -> None:
         self.world, self.scenario = world, scenario
         self.rng = np.random.default_rng(world.config["seed"])
 

@@ -1,4 +1,3 @@
-from copy import deepcopy
 import time
 import pytest
 from masonmind.config import load_config

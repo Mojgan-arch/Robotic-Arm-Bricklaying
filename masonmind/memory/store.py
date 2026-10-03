@@ -9,7 +9,7 @@ from masonmind.schemas import MemoryRule
 class MemoryStore:
     """Keep validated evidence locally; disabled memory performs no file I/O."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict) -> None:
         self.enabled, self.path, self.limit = config["enabled"], Path(config["path"]), config["max_rules"]
 
     def rules(self) -> list[MemoryRule]:

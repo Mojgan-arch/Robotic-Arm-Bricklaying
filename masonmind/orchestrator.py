@@ -1,12 +1,15 @@
 """Bounded generate/verify/repair orchestration, with no agent motion commands."""
 from pathlib import Path
 from collections.abc import Callable
+import numpy as np
 from masonmind.config import load_config
 from masonmind.io import create_run, save_json
 from masonmind.llm.providers import make_client
+from masonmind.llm import LLMClient
+from masonmind.scan.registration import ScanResult
 from masonmind import agents
 from masonmind.schemas import (Design, AssemblySequence, BuildReport, SupervisorDecision,
-    DesignProgram, SequenceStrategy, StructuralReview, ReachabilityReview, CoordinatorDecision, ClarifierOutput)
+    DesignProgram, SequenceStrategy, StructuralReview, ReachabilityReview, CoordinatorDecision, ClarifierOutput, Brick)
 from masonmind.design.compiler import compile_program
 from masonmind.design.verifier import verify
 from masonmind.design.sequencer import plan_sequence
@@ -18,7 +21,7 @@ class Orchestrator:
     """The only layer joining agent decisions, geometry, motion and perception."""
 
     def __init__(self, config: dict | None = None, llm_config: dict | None = None,
-                 run: Path | None = None, client=None, ask_user: Callable[[str], str] | None = None):
+                 run: Path | None = None, client: LLMClient | None = None, ask_user: Callable[[str], str] | None = None) -> None:
         self.config, self.llm_config = config or load_config(), llm_config or load_config("llm")
         if self.config.get("variant", "B3") != "B3":
             self.config["memory"]["enabled"] = False
@@ -153,7 +156,7 @@ class BuildSession:
     """
 
     def __init__(self, owner: Orchestrator, design: Design, sequence: AssemblySequence,
-                 scenario: str, variant: str, video: bool):
+                 scenario: str, variant: str, video: bool) -> None:
         self.owner, self.design, self.sequence = owner, design, sequence
         self.config, self.run = owner.config, owner.run
         self.scenario = load_config(f"scenarios/{scenario}")
@@ -187,7 +190,7 @@ class BuildSession:
         self.checker.scene = [self.world.table, *self.proxies.bricks.values(), *self.proxies.obstacles]
         self.checker.support_bodies = {self.world.table, *self.proxies.bricks.values()}
 
-    def scan(self, bricks: list) -> object:
+    def scan(self, bricks: list[Brick]) -> ScanResult:
         """Store estimates and independent truth error in separate artifacts."""
         from masonmind.scan.registration import scan_bricks
         from masonmind.scan.evaluation import evaluate_scan
@@ -211,7 +214,7 @@ class BuildSession:
             self.refresh_known()
         return result
 
-    def supervisor(self, **evidence) -> SupervisorDecision:
+    def supervisor(self, **evidence: object) -> SupervisorDecision:
         """Invoke a validated decision with measured evidence and current stock."""
         course = evidence.pop("course", -1)
         decision = self.owner.agent(agents.SiteSupervisor).decide({
@@ -226,12 +229,12 @@ class BuildSession:
             self.incidents.append({"course": course, "action": decision.action, "brick_ids": decision.brick_ids})
         return decision
 
-    def supervised_plan(self, start, goal):
+    def supervised_plan(self, start: np.ndarray, goal: np.ndarray) -> list[np.ndarray]:
         """Retry the same task after a concrete supervisor intervention."""
         from masonmind.planning.rrt_connect import PlanningError
         for _ in range(self.config["construction"]["max_motion_retries"]):
             try:
-                return self.controller.plan(self.arm.state() if _ else start, goal)
+                return self.controller.plan(start, goal)
             except PlanningError as error:
                 from masonmind.io import append_json
                 append_json(self.run / "planning_failures.jsonl", {"phase": self.arm.phase, "error": str(error)})
@@ -241,7 +244,7 @@ class BuildSession:
                 self.apply_decision(decision)
         raise PlanningError("Supervisor motion retry budget exhausted")
 
-    def supervised_execute(self, path) -> None:
+    def supervised_execute(self, path: list[np.ndarray]) -> None:
         """Resume an interrupted primitive from current encoders, not from its start."""
         from masonmind.planning.rrt_connect import PlanningError
         goal = path[-1]
@@ -255,7 +258,7 @@ class BuildSession:
                 path = self.supervised_plan(self.arm.state(), goal)
         raise PlanningError("Supervisor execution retry budget exhausted")
 
-    def place(self, brick, corrective: bool = False) -> None:
+    def place(self, brick: Brick, corrective: bool = False) -> None:
         """Consume stock and physically place it; correction runs use fresh calibrated stock."""
         if self.stock <= 0:
             raise RuntimeError("No stock available")
@@ -393,7 +396,7 @@ class BuildSession:
             raise RuntimeError(f"Course {course} still outside tolerance after intervention budget")
         self.review_course(course, scan)
 
-    def review_course(self, course: int, scan) -> None:
+    def review_course(self, course: int, scan: ScanResult) -> None:
         """Critique visible intent and retain lessons only with measured outcomes."""
         from masonmind.io import append_json
         folder = self.latest_scan_folder

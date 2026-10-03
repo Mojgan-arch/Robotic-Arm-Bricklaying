@@ -7,7 +7,7 @@ from masonmind.sim.env import World
 class ScriptedObstacle:
     """Enter, dwell and leave along a configured path in simulation time."""
 
-    def __init__(self, world: World, kind: str):
+    def __init__(self, world: World, kind: str) -> None:
         self.world, self.kind = world, kind
         self.cfg = world.config["construction"]
         self.body = world.box(self.cfg["obstacle_size"], self.cfg["obstacle_start"], color=(.15, .55, .85, 1))

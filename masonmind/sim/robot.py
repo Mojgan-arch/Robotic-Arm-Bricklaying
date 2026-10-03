@@ -8,7 +8,7 @@ from masonmind.sim.env import World
 class Panda:
     """A seven-joint arm with contact-checked fixed-constraint grasping."""
 
-    def __init__(self, world: World):
+    def __init__(self, world: World) -> None:
         if world.robot is None:
             raise ValueError("World has no robot")
         self.world, self.body = world, world.robot

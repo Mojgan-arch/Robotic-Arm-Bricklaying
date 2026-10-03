@@ -2,6 +2,54 @@
 
 Research implementation of robotic masonry with a Franka Panda and task-level LLM agents.
 
+![Recorded Panda construction](assets/masonmind_demo.gif)
+
+Recorded full 12-brick build with a moving obstacle, accelerated approximately 21x.
+
+## Start here
+
+The prepared Windows environment can run directly:
+
+```powershell
+.\run.ps1 -Mode design
+.\run.ps1 -Scenario moving_obstacle -NoVideo
+.\run.ps1 -Mode app
+.\run.ps1 -Mode test
+```
+
+The optional Gradio interface opens at http://127.0.0.1:7860. Generate a design,
+review its placement animation and agent outputs, then start construction.
+The construction video and measured deviations appear after completion; the UI
+does not stream live video. Install `pip install -e ".[ui]"` in a fresh environment.
+The default CLI now runs the entire pipeline; use `--no-video` for faster runs.
+
+```mermaid
+flowchart LR
+  Brief --> Agents[Task-level design agents]
+  Agents --> DSL[Validated DSL]
+  DSL --> Geometry[Geometry and support checks]
+  Geometry --> Sequence[Sequence and gravity checks]
+  Sequence --> Planner[RRT and joint timing]
+  Planner --> Panda[PyBullet Panda]
+  Panda --> RGBD[RGB-D observations]
+  RGBD --> ICP[ICP and obstacle proxies]
+  ICP --> Supervisor
+  Supervisor --> Planner
+  Supervisor --> Memory[Evidence-backed memory]
+  Memory --> Agents
+```
+
+**Verified delivery:** 53 automated tests pass. A complete quick experiment matrix
+contains 36 trials: B0 completed 3/9, B1 5/9, B2 6/9 and B3 6/9 (20/36 total).
+The difficult noisy-placement, early-drop and combined scenarios fail in this
+seed-0 coarse-sampling matrix; failures remain in the CSV. B2 and B3 being equal
+does not establish a memory benefit. Live paid providers have not been tested.
+
+![Measured experiment comparison](assets/experiment_comparison.png)
+
+Source specification: [PROJECT_SPEC.md](PROJECT_SPEC.md). Detailed implementation
+history: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 **Division of labor:** deterministic algorithms solve geometry and motion. LLM agents
 make design and task-level decisions. LLMs never produce coordinates, joint angles,
 or trajectories. The default provider is a deterministic offline mock.
@@ -13,7 +61,7 @@ Python 3.10+ (local environment uses Python 3.11). From this directory:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
+pip install -e ".[dev,ifc,experiments]"
 python -m masonmind --help
 pytest
 ```
@@ -69,7 +117,15 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   measured metrics and PNG/PDF plots. Acceptance: 49 tests pass; `--quick` finished
   all 36 trials and created comparison figures. Completion: B0 3/9, B1 5/9,
   B2 6/9, B3 6/9 (20/36 total). Mock memory did not improve these outcomes.
-- M10: documentation/interface polish pending.
+- M10: optional local Gradio design review and construction UI, Windows launcher,
+  recorded demo, documentation and measured experiment plots. Acceptance: 53 tests
+  pass, including HTTP page serving; static undefined-name/type-annotation checks
+  and dependency consistency pass. The UI returns recorded rather than live video.
+  Final recorded run `20261003T082556_6b444c2b`: 12/12 bricks, zero obstacle
+  contact ticks, one stop and one successful replan, mean placement error 0.0264 mm.
+  Recording 24 fps at 640x480 took about 26 minutes on the development machine;
+  use `--no-video` for faster experiments. This is simulation-time monitoring,
+  not a demonstrated wall-clock real-time hardware controller.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -102,6 +158,58 @@ continuous-time certified. Intended finger-grasp and upward supporting contacts
 are permitted only during relevant approach/lift/place phases with a penetration
 limit; other known objects remain collision geometry. Motor tracking and physics
 still produce placement error, which must be measured rather than assumed zero.
+
+## DSL reference
+
+```json
+{
+  "n_courses": 3,
+  "bricks_per_course": 6,
+  "bond": "stack",
+  "rotation_rules": [{
+    "region": {"course_start": 0, "course_end": 2, "u_start": 0, "u_end": 1},
+    "kind": "wave", "amplitude_deg": 20, "frequency": 1,
+    "phase_shift_per_course": 0, "combine": "override"
+  }],
+  "opening_rules": [],
+  "seed": 7,
+  "rationale": "Repeat a shallow wave across supported courses"
+}
+```
+
+| Field | Values and meaning |
+| --- | --- |
+| `n_courses`, `bricks_per_course` | 3–15 courses; 4–14 cells per course |
+| `bond` | `stack` or `running` |
+| Rotation `kind` | `wave`, `zigzag`, `twist_gradient`, `alternate`, `constant` |
+| `amplitude_deg`, `frequency` | 0–45 degrees; positive frequency |
+| `combine` | Apply rules in order using `add` or `override` |
+| Opening `kind` | `gradient`, `diamond`, `stripe`, `checker`, `random` |
+| `ratio_start`, `ratio_end` | Removal probabilities from 0 to 0.5 |
+| Opening `size` | Optional normalized geometric opening extent, greater than 0 and at most 1 |
+| `region` | Inclusive course indices and normalized wall interval `u` |
+
+The strict schema rejects extra fields. The compiler computes coordinates and the
+verifier can reject a schema-valid program. See `tests/test_design.py` for examples.
+
+## Configuration and outputs
+
+| YAML section | Controls |
+| --- | --- |
+| `geometry` | Brick dimensions, pitch, origin, footprint and support limits |
+| `sim` | Physics, supply, Panda home, grasp, camera and video |
+| `planning` | RRT limits, edge sampling, joint speed and slowdown/stop distances |
+| `sequence` | Finger geometry, approach and intermediate stability checks |
+| `scan` | Camera views, ICP, clustering, noise and deviation tolerances |
+| `construction` | Intervention bounds, scripted disturbances and batch answers |
+| `agents`, `memory` | Repair limits, persistent rule path and retrieval count |
+
+Scenario overrides live in `configs/scenarios/`. Provider selection is separate
+in `configs/llm.yaml`. Every run saves configuration and design versions, verifier
+reports, sequence, agent audit JSONL, motion/planning logs, course scan results,
+final report and optional IFC/video inside its unique `runs/` folder.
+Supervisor actions are `ACCEPT`, `REPOSITION`, `REPLACE`, `RESEQUENCE`,
+`REPLAN_REMAINING`, `WAIT` and `ASK_USER`; each has an implemented handler.
 
 ## Agents and providers
 
@@ -207,3 +315,21 @@ seeds is undefined for a one-seed quick run. Plot averages include measured fail
 trials; duration is wall-clock time, also affected by concurrent runs.
 
 This is simulation research software. It is not a certified controller for hardware.
+
+### Measured results at normal fidelity
+
+| Scenario / variant | Completion | Measured outcome |
+| --- | --- | --- |
+| Moving obstacle / B3 | Yes | 1 stop, 1 replan; zero scripted-obstacle contact ticks |
+| Blocking obstacle / B3 | Yes | WAIT intervention; zero scripted-obstacle contact ticks |
+| Noisy placement / B0, seed 7 | No | Mean displacement 7.332 mm; collapse detected |
+| Noisy placement / B3, seed 7 | Yes | Mean displacement 0.444 mm; 3 reposition actions |
+| Broken stock / B0, seed 1 | — | Pose error 0.025 mm; size-aware geometry deviation 2.046 mm |
+| Broken stock / B3, seed 1 | Yes | Replacement; pose error 0.027 mm |
+
+These are individual simulation trials, not statistical evidence of general
+performance. The collision metric counts contact ticks with scripted obstacles,
+not every robot/brick contact. Corrective placement uses calibrated motion without
+reinjecting disturbance noise. Real cameras, real robot hardware, and live LLM
+quality remain unvalidated. The broken-stock pose-centre improvement requested
+in M7 is not demonstrated; the measured benefit is shape conformance.

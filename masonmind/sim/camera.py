@@ -17,7 +17,7 @@ class Frame:
 class Camera:
     """A calibrated virtual camera with seeded sensor noise."""
 
-    def __init__(self, world: World, eye: list[float] | None = None, resolution: tuple[int, int] | None = None):
+    def __init__(self, world: World, eye: list[float] | None = None, resolution: tuple[int, int] | None = None) -> None:
         self.world = world
         cfg = world.sim
         self.width, self.height = resolution or (cfg["camera_width"], cfg["camera_height"])

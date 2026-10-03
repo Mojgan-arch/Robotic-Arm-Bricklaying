@@ -16,7 +16,7 @@ class Agent:
     name: str
     schema: type[BaseModel]
 
-    def __init__(self, client: LLMClient, config: dict, run: Path, retries: int = 3):
+    def __init__(self, client: LLMClient, config: dict, run: Path, retries: int = 3) -> None:
         self.client, self.config, self.run, self.retries = client, config, run, retries
 
     def build_input(self, **evidence: object) -> dict:

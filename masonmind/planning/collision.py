@@ -11,7 +11,7 @@ class CollisionChecker:
     must supply perception proxies. Candidate checks restore all encoder/body states.
     """
 
-    def __init__(self, arm: Panda, scene: list[int]):
+    def __init__(self, arm: Panda, scene: list[int]) -> None:
         self.arm, self.world = arm, arm.world
         self.scene = list(scene)
         self.support_bodies: set[int] = {self.world.table}

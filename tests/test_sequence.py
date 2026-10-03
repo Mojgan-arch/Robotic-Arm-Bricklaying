@@ -1,7 +1,7 @@
 from masonmind.config import load_config
 from masonmind.schemas import DesignProgram, SequenceStrategy, Brick, Design
 from masonmind.design.compiler import compile_program
-from masonmind.design.sequencer import plan_sequence, dependencies, gripper_collisions
+from masonmind.design.sequencer import plan_sequence, dependencies
 from masonmind.sim.stability import drop_test
 
 

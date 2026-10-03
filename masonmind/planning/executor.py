@@ -7,6 +7,8 @@ import pybullet as p
 from masonmind.io import append_json
 from masonmind.schemas import MotionEvent
 from masonmind.planning.controller import StaticController
+from masonmind.planning.collision import CollisionChecker
+from masonmind.sim.recorder import Recorder
 from masonmind.planning.rrt_connect import PlanningError, edge_free
 from masonmind.planning.time_param import parameterize
 
@@ -21,7 +23,7 @@ def speed_scale(distance: float, stop: float, slow: float) -> float:
 class MonitoredExecutor(StaticController):
     """Perception-driven execution; unknown obstacle ground truth is inaccessible."""
 
-    def __init__(self, checker, perceive: Callable[[], list[int]], log_path: Path, recorder=None):
+    def __init__(self, checker: CollisionChecker, perceive: Callable[[], list[int]], log_path: Path, recorder: Recorder | None = None) -> None:
         super().__init__(checker, log_path.parent / "planning.jsonl")
         self.perceive, self.motion_log, self.recorder = perceive, log_path, recorder
         self.events: list[MotionEvent] = []

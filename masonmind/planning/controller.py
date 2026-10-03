@@ -12,7 +12,7 @@ from masonmind.planning.time_param import parameterize
 class StaticController:
     """Connect classical planning to the Panda's pick/place primitives."""
 
-    def __init__(self, checker: CollisionChecker, log_path: Path | None = None):
+    def __init__(self, checker: CollisionChecker, log_path: Path | None = None) -> None:
         self.checker, self.arm = checker, checker.arm
         self.config = checker.world.config["planning"]
         self.log_path = log_path

@@ -1,4 +1,3 @@
-from pathlib import Path
 from types import SimpleNamespace
 import numpy as np
 import pytest
@@ -23,6 +22,29 @@ def test_speed_zones():
     assert speed_scale(.065, .03, .1) == pytest.approx(.5)
     with pytest.raises(ValueError):
         speed_scale(.1, .2, .1)
+
+
+def test_retry_preserves_virtual_segment_start(tmp_path):
+    """Preplanned Cartesian segments must not jump back to measured encoders."""
+    from masonmind.planning.rrt_connect import PlanningError
+    session = make_session(tmp_path)
+    start, goal = np.ones(7), np.ones(7) * 2
+    attempts = []
+
+    def plan(begin, end):
+        attempts.append(begin.copy())
+        if len(attempts) == 1:
+            raise PlanningError("Temporary obstruction")
+        return [begin, end]
+
+    session.arm = SimpleNamespace(phase="place", state=lambda: np.zeros(7))
+    session.controller = SimpleNamespace(plan=plan)
+    session.supervisor = lambda **evidence: SupervisorDecision(action="WAIT", wait_seconds=1, reasoning="clear obstruction")
+    session.apply_decision = lambda decision: None
+    result = session.supervised_plan(start, goal)
+    assert len(attempts) == 2
+    assert all(np.array_equal(value, start) for value in attempts)
+    assert np.array_equal(result[0], start)
 
 
 def test_replan_remaining_preserves_built_course(tmp_path):

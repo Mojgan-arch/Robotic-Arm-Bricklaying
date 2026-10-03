@@ -10,7 +10,7 @@ from masonmind.config import load_config
 class World:
     """Own the physics client and deterministic scene objects."""
 
-    def __init__(self, config: dict[str, Any] | None = None, robot: bool = True):
+    def __init__(self, config: dict[str, Any] | None = None, robot: bool = True) -> None:
         self.config = config or load_config()
         self.sim = self.config["sim"]
         self.cid = p.connect(p.GUI if self.sim["gui"] else p.DIRECT)

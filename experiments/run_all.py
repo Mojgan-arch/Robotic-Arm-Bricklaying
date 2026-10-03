@@ -1,9 +1,7 @@
 """Run a genuine variant x scenario x seed matrix and preserve failed trials."""
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from copy import deepcopy
 import csv
-import json
 from pathlib import Path
 from masonmind.config import load_config, ROOT
 from masonmind.io import create_run

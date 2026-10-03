@@ -5,7 +5,7 @@ import argparse
 def main() -> None:
     """Run a reproducible masonry demonstration."""
     parser = argparse.ArgumentParser(description="MasonMind robotic masonry research demo")
-    parser.add_argument("--milestone", type=int, default=1, choices=range(1, 11))
+    parser.add_argument("--milestone", type=int, default=10, choices=range(1, 11))
     parser.add_argument("--scenario", default="clean")
     parser.add_argument("--variant", default="B3", choices=["B0", "B1", "B2", "B3"])
     parser.add_argument("--seed", type=int, default=7)

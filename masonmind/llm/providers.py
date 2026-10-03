@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from typing import Any
 from masonmind.llm.mock import MockClient
+from masonmind.llm import LLMClient
 
 
 def strict_schema(schema: dict) -> dict:
@@ -30,7 +31,7 @@ def strict_schema(schema: dict) -> dict:
 class HTTPClient:
     """Shared transport, with redacted errors and usage accounting."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict) -> None:
         self.config = config
         self.usage: dict = {}
 
@@ -107,7 +108,7 @@ class OllamaClient(HTTPClient):
         return result["message"]["content"]
 
 
-def make_client(config: dict) -> Any:
+def make_client(config: dict) -> LLMClient:
     """Create the provider selected in YAML, without hard-coded model names."""
     clients = {"openai": OpenAIClient, "anthropic": AnthropicClient, "ollama": OllamaClient}
     if config["provider"] == "mock":

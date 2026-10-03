@@ -8,7 +8,7 @@ from masonmind.sim.env import World
 class ProxyScene:
     """Invisible query-only geometry; it cannot push objects in the physics world."""
 
-    def __init__(self, world: World):
+    def __init__(self, world: World) -> None:
         self.world = world
         self.bricks: dict[str, int] = {}
         self.obstacles: list[int] = []
