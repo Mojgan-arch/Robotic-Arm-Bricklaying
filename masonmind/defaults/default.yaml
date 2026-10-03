@@ -1,4 +1,13 @@
 seed: 7
+variant: B3
+baseline:
+  n_courses: 3
+  bricks_per_course: 4
+  bond: stack
+  rotation_rules: []
+  opening_rules: []
+  seed: 7
+  rationale: Fixed baseline wall
 geometry:
   brick_size: [0.054, 0.026, 0.016]
   pitch: 0.062

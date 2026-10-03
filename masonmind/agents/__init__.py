@@ -38,3 +38,11 @@ class VLMCritic(Agent):
 
 class MemoryKeeper(Agent):
     name, schema = "MemoryKeeper", MemoryOutput
+
+
+class SingleDesigner(Agent):
+    name, schema = "SingleAgent", ArchitectOutput
+
+
+class SingleSupervisor(Agent):
+    name, schema = "SingleAgent", SupervisorDecision

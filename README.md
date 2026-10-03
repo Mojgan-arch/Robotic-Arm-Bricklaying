@@ -65,7 +65,11 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   memory with evidence, confirmation counts, keyword/confidence/recency retrieval.
   Acceptance: 46 tests pass; noisy-placement incidents write rules, and a subsequent
   Architect call includes a previously stored rule in its audited prompt.
-- M9–M10: pending implementation and acceptance runs.
+- M9: genuine variant/scenario/seed matrix, atomic CSV output, retained failures,
+  measured metrics and PNG/PDF plots. Acceptance: 49 tests pass; `--quick` finished
+  all 36 trials and created comparison figures. Completion: B0 3/9, B1 5/9,
+  B2 6/9, B3 6/9 (20/36 total). Mock memory did not improve these outcomes.
+- M10: documentation/interface polish pending.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -181,5 +185,25 @@ Supervisor inputs contain a `memory_rules` list; inspect `llm_log.jsonl` to audi
 Set `memory.enabled: false` to disable both reading and writing.
 The mock critic always returns 7/10 with an explicit fixture warning. This checks
 the integration and cannot support a scientific claim about design intent.
+
+## Experiments
+
+```powershell
+pip install -e ".[experiments]"
+python experiments/run_all.py --quick
+python experiments/run_all.py --seeds 3 --jobs 2
+python experiments/plots.py experiments/results.csv
+```
+
+Quick runs all four variants and all nine scenarios with seed 0. It uses a 20 mm
+Cartesian approach sampling step and 96x72 monitoring frames for runtime; it is
+an integration check, not a publication-quality benchmark. Normal runs retain
+the configured motion/sensor parameters and use `configs/llm.yaml`; quick uses
+`configs/llm_mock.yaml`. Memory is isolated by variant/seed, then retained across
+scenarios in a batch. Matplotlib is the additional lightweight plotting dependency.
+`results.csv` includes failures, run paths, costs (unknown prices remain null),
+scan accuracy, motion events, corrections and design signatures. Diversity across
+seeds is undefined for a one-seed quick run. Plot averages include measured failed
+trials; duration is wall-clock time, also affected by concurrent runs.
 
 This is simulation research software. It is not a certified controller for hardware.

@@ -9,6 +9,8 @@ class MockClient:
                  json_schema: dict | None = None) -> str:
         """Produce a valid response for each known role."""
         agent = system.splitlines()[0].removeprefix("Agent: ").strip()
+        if agent == "SingleAgent":
+            agent = "Architect" if "program" in (json_schema or {}).get("properties", {}) else "SiteSupervisor"
         data = json.loads(messages[0]["content"])
         program = {"n_courses": data.get("n_courses", 3), "bricks_per_course": data.get("bricks_per_course", 4),
                    "bond": "stack", "rotation_rules": [], "opening_rules": [],

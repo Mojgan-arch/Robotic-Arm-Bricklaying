@@ -5,7 +5,8 @@ from masonmind.config import load_config
 from masonmind.io import create_run, save_json
 from masonmind.llm.providers import make_client
 from masonmind import agents
-from masonmind.schemas import Design, AssemblySequence, BuildReport, SupervisorDecision
+from masonmind.schemas import (Design, AssemblySequence, BuildReport, SupervisorDecision,
+    DesignProgram, SequenceStrategy, StructuralReview, ReachabilityReview, CoordinatorDecision, ClarifierOutput)
 from masonmind.design.compiler import compile_program
 from masonmind.design.verifier import verify
 from masonmind.design.sequencer import plan_sequence
@@ -19,6 +20,8 @@ class Orchestrator:
     def __init__(self, config: dict | None = None, llm_config: dict | None = None,
                  run: Path | None = None, client=None, ask_user: Callable[[str], str] | None = None):
         self.config, self.llm_config = config or load_config(), llm_config or load_config("llm")
+        if self.config.get("variant", "B3") != "B3":
+            self.config["memory"]["enabled"] = False
         self.run = run or create_run()
         self.run.mkdir(parents=True, exist_ok=True)
         self.client = client or make_client(self.llm_config)
@@ -32,6 +35,8 @@ class Orchestrator:
 
     def agent(self, role: type[agents.Agent]) -> agents.Agent:
         """Instantiate a role with this run's logging and validation settings."""
+        if self.config.get("variant") == "B1":
+            role = {agents.Architect: agents.SingleDesigner, agents.SiteSupervisor: agents.SingleSupervisor}.get(role, role)
         return role(self.client, self.llm_config, self.run, self.config["agents"]["validation_retries"])
 
     def reachability(self, design: Design) -> dict:
@@ -58,7 +63,23 @@ class Orchestrator:
 
     def run_phase_a(self, user_text: str) -> tuple[Design, AssemblySequence]:
         """Clarify, generate, verify, repair, sequence, review and export a design."""
-        clarification = self.agent(agents.Clarifier).decide({"user_text": user_text})
+        variant = self.config.get("variant", "B3")
+        if variant == "B0":
+            self.brief = user_text
+            program = DesignProgram.model_validate({**self.config["baseline"], "seed": self.config["seed"]})
+            design = compile_program(program, self.config)
+            sequence = plan_sequence(design, SequenceStrategy(strategy="left_to_right", rationale="Fixed B0 order"), self.config)
+            report = verify(design, self.config)
+            if not report.passed or not sequence.report.passed:
+                raise RuntimeError("Fixed baseline design/sequence failed validation")
+            save_json(self.run / "design_v1.json", design)
+            save_json(self.run / "program_v1.json", program)
+            save_json(self.run / "verification_v1.json", report)
+            save_json(self.run / "sequence_v1.json", sequence)
+            export_ifc(design, sequence, self.run / "design_v1.ifc", self.config)
+            return design, sequence
+        clarification = (ClarifierOutput(brief=user_text) if variant == "B1" else
+                         self.agent(agents.Clarifier).decide({"user_text": user_text}))
         self.brief = clarification.brief
         self.memory_rules = self.memory.retrieve(self.brief)
         if clarification.questions:
@@ -80,7 +101,8 @@ class Orchestrator:
                 feedback = [i.model_dump() for i in report.issues]
                 self.repair_rounds += 1
                 continue
-            strategy = self.agent(agents.SequenceStrategist).decide({"program": program, "issues": feedback, "memory_rules": self.memory_rules})
+            strategy = (SequenceStrategy(strategy="left_to_right", rationale="Single-agent baseline fixed order") if variant == "B1" else
+                        self.agent(agents.SequenceStrategist).decide({"program": program, "issues": feedback, "memory_rules": self.memory_rules}))
             sequence = plan_sequence(design, strategy, self.config)
             save_json(self.run / f"sequence_v{design.version}.json", sequence)
             if not sequence.report.passed:
@@ -89,11 +111,14 @@ class Orchestrator:
                 continue
             stability = drop_test(design.bricks, self.config)
             reachability = self.reachability(design)
-            structural = self.agent(agents.StructuralEngineer).decide({"program": program, "verifier": report,
-                "drop_test": stability, "passed": report.passed and stability.passed, "memory_rules": self.memory_rules})
-            operator = self.agent(agents.RobotOperator).decide({"program": program, **reachability})
+            structural = (StructuralReview(approved=stability.passed, reasoning="Deterministic baseline guard") if variant == "B1" else
+                          self.agent(agents.StructuralEngineer).decide({"program": program, "verifier": report,
+                "drop_test": stability, "passed": report.passed and stability.passed, "memory_rules": self.memory_rules}))
+            operator = (ReachabilityReview(approved=reachability["passed"], reasoning="Deterministic baseline guard") if variant == "B1" else
+                        self.agent(agents.RobotOperator).decide({"program": program, **reachability}))
             reviews = [structural, operator]
-            decision = self.agent(agents.Coordinator).decide({"reviews": reviews})
+            decision = (CoordinatorDecision(approved=all(r.approved for r in reviews)) if variant == "B1" else
+                        self.agent(agents.Coordinator).decide({"reviews": reviews}))
             save_json(self.run / f"reviews_v{design.version}.json", {"structural": structural, "operator": operator,
                 "stability": stability, "reachability": reachability, "coordinator": decision})
             if decision.approved and all(r.approved for r in reviews) and stability.passed and reachability["passed"]:
@@ -428,7 +453,12 @@ class BuildSession:
                 self.controller = MonitoredExecutor(self.checker, self.observe, self.run / "motion_log.jsonl", recorder)
                 self.controller.allow_replan = self.variant != "B1"
                 self.controller.observe(force=True)
-                self.arm.plan, self.arm.execute = self.supervised_plan, self.supervised_execute
+                if self.variant == "B1":
+                    from masonmind.planning.controller import StaticController
+                    self.arm.plan = self.controller.plan
+                    self.arm.execute = lambda path: StaticController.execute(self.controller, path)
+                else:
+                    self.arm.plan, self.arm.execute = self.supervised_plan, self.supervised_execute
             try:
                 while self.remaining:
                     name = self.remaining[0]
@@ -483,6 +513,10 @@ class BuildSession:
                     "Collision metric counts contact ticks with scripted obstacles, not intended support/grasp contacts.",
                     "Corrective placements use calibrated stock without injected release noise.",
                     *([] if self.failure is None else [self.failure])])
+            save_json(self.run / "report.json", report)
+            from masonmind.metrics import enrich_metrics
+            report.metrics.update(enrich_metrics(self.run, self.owner.llm_config, events,
+                [] if self.controller is None else self.controller.replan_times))
             save_json(self.run / "report.json", report)
             from PIL import Image
             Image.fromarray(self.cameras[0].capture(unproject=False).rgb).save(self.run / "final.png")
