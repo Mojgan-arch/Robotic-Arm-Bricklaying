@@ -50,7 +50,12 @@ See [upstream files](https://pypi.org/project/pybullet/3.2.7/) and
   content-addressed cache, IFC4 export. Acceptance: 35 offline tests pass; mock
   repairs one deliberately unsupported program, approves 12 bricks, and exports
   an IFC with one geometric element and order property per brick.
-- M6–M10: pending implementation and acceptance runs.
+- M6: two-view depth unprojection, masked unknown-object clustering, per-brick
+  point-to-plane Open3D ICP, heatmap and separate ground-truth evaluation.
+  Acceptance: 37 tests pass; noisy six-brick course mean scan error **0.027 mm /
+  0.014 degrees** with ideal depth. The padded perceived obstacle box encloses
+  the known test obstacle. These are synthetic-sensor results, not real-camera claims.
+- M7–M10: pending implementation and acceptance runs.
 
 ```powershell
 python scripts/demo.py --milestone 1
@@ -105,5 +110,17 @@ responses, validation errors, latency and available token usage, never credentia
 Phase A robot review currently checks target IK and empty-scene approach planning;
 carried-object paths through the evolving scene are checked at construction time.
 An agent cannot override a failed deterministic check.
+
+## Perception
+
+Install `pip install -e ".[scan,ifc]"` and run `python scripts/demo.py --milestone 6`.
+The control-side detector receives only image-derived points and known-body IDs;
+it has no simulator pose access. Brick IDs use simulated instance segmentation,
+which is an optimistic association assumption. ICP registers visible observations
+to a sampled nominal box; evaluation reads ground truth in a separate module.
+Missing means **unobserved**, which can also mean occluded. Obstacle bounds cover
+observed surfaces with configurable padding, not all possible hidden geometry.
+TinyRenderer's integer-X / inverted-Y pixel convention is tested by calibrated
+boxes; using a generic pixel-centre offset introduces millimetre-scale bias.
 
 This is simulation research software. It is not a certified controller for hardware.

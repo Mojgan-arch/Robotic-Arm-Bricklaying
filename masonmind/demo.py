@@ -27,6 +27,9 @@ def run_demo(args: Namespace) -> None:
         design, sequence = orchestrator.run_phase_a(args.text)
         print(f"Approved {len(sequence.order)} bricks after {orchestrator.repair_rounds} repairs: {orchestrator.run.resolve()}")
         return
+    if args.milestone == 6:
+        perception_demo(args)
+        return
     if args.milestone != 1:
         raise ValueError("Only milestone 1 is implemented at this development stage")
     config = load_config()
@@ -137,3 +140,36 @@ def baseline_demo(args: Namespace) -> None:
                 "placement_error_mm": errors, "obstacle_contact_ticks": collision_count[0],
                 "planning_time_s": None if not controller else controller.durations})
         print(f"Built {name}: {run.resolve()}")
+
+
+def perception_demo(args: Namespace) -> None:
+    """Measure multi-view ICP and obstacle-box accuracy on a noisy course."""
+    from masonmind.schemas import DesignProgram
+    from masonmind.design.compiler import compile_program
+    from masonmind.scan.registration import scan_bricks
+    from masonmind.scan.evaluation import evaluate_scan
+    from masonmind.scan.heatmap import heatmap
+    from masonmind.planning.perception import detect_obstacles
+    cfg = load_config()
+    run = create_run()
+    design = compile_program(DesignProgram(n_courses=3, bricks_per_course=6, bond="stack", seed=args.seed, rationale="Scan accuracy"), cfg)
+    bricks = [b for b in design.bricks if b.course == 0]
+    rng = np.random.default_rng(args.seed)
+    with World(cfg, robot=False) as world:
+        for brick in bricks:
+            delta = rng.normal(0, .004, 2)
+            world.spawn_brick(brick.id, [brick.x + delta[0], brick.y + delta[1], brick.z], rng.normal(0, 3))
+        obstacle_center, obstacle_size = np.array([.48, -.15, .10]), np.array([.06, .06, .12])
+        world.box(obstacle_size.tolist(), obstacle_center.tolist())
+        frames = [Camera(world, eye).capture() for eye in cfg["scan"]["camera_eyes"]]
+        scan = scan_bricks(frames, bricks, world.bricks, cfg)
+        accuracy = evaluate_scan(bricks, scan.deviations, world.bricks, world.cid)
+        boxes = detect_obstacles(frames, world.known_ids, cfg["scan"])
+        accuracy["obstacles"] = [{"minimum": box.minimum.tolist(), "maximum": box.maximum.tolist(),
+            "encloses_truth": bool(np.all(box.minimum <= obstacle_center - obstacle_size / 2) and
+                                    np.all(box.maximum >= obstacle_center + obstacle_size / 2)),
+            "center_error_mm": float(np.linalg.norm(box.center - obstacle_center) * 1000)} for box in boxes]
+        save_json(run / "scan_accuracy.json", accuracy)
+        save_json(run / "deviations.json", scan.deviations)
+        heatmap(scan.deviations, run / "heatmap.png", cfg["scan"]["translation_tolerance_mm"])
+        print(f"Scan accuracy: {accuracy['mean_translation_error_mm']:.3f} mm / {accuracy['mean_yaw_error_deg']:.3f} deg. {run.resolve()}")

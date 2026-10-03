@@ -61,6 +61,14 @@ sequence:
   finger_gap: 0.028
   approach_height: 0.10
 scan:
+  camera_eyes: [[0.85, -0.65, 0.65], [0.15, 0.65, 0.65]]
+  obstacle_padding_m: 0.004
+  voxel_size_m: 0.005
+  model_spacing_m: 0.002
+  min_brick_points: 12
+  broken_length_ratio: 0.75
+  icp_min_fitness: 0.6
+  perception_interval_s: 0.25
   translation_tolerance_mm: 3.0
   yaw_tolerance_deg: 2.0
   depth_noise_m: 0.0

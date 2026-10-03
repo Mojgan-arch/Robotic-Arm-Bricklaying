@@ -40,8 +40,10 @@ class Camera:
         if not unproject:
             return Frame(rgb, depth, segmentation, np.empty((0, 3)), np.empty(0, dtype=int))
         yy, xx = np.mgrid[:self.height, :self.width]
-        clip = np.stack([2 * (xx + 0.5) / self.width - 1,
-                         1 - 2 * (yy + 0.5) / self.height,
+        # TinyRenderer uses integer X samples and bottom-up Y raster rows.
+        # The Y+1 convention is verified against independently known box surfaces.
+        clip = np.stack([2 * xx / self.width - 1,
+                         1 - 2 * (yy + 1) / self.height,
                          2 * depth - 1, np.ones_like(depth)], axis=-1)
         homogeneous = clip @ self.inverse.T
         points = homogeneous[..., :3] / homogeneous[..., 3:]
