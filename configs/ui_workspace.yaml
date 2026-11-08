@@ -1,0 +1,11 @@
+# Orient the wall across the Panda's frontal workspace, rather than radially.
+# This is deterministic workcell placement, never an LLM-generated pose.
+geometry:
+  wall_yaw_deg: 90.0
+sim:
+  enable_sleeping: true
+planning:
+  # Accelerated simulation profile, not hardware operating limits.
+  velocity: 2.4
+  acceleration: 13.5
+  continuous_retiming: true

@@ -22,8 +22,9 @@ class Region(Schema):
 
 class RotationRule(Schema):
     region: Region
-    kind: Literal["wave", "zigzag", "twist_gradient", "alternate", "constant"]
+    kind: Literal["wave", "zigzag", "twist_gradient", "length_gradient", "alternate", "constant"]
     amplitude_deg: float = Field(ge=0, le=45)
+    start_deg: float = Field(default=0, ge=-45, le=45)
     frequency: float = Field(default=1, gt=0)
     phase_shift_per_course: float = 0
     combine: Literal["add", "override"] = "add"
@@ -31,7 +32,7 @@ class RotationRule(Schema):
 
 class OpeningRule(Schema):
     region: Region
-    kind: Literal["gradient", "diamond", "stripe", "checker", "random"]
+    kind: Literal["gradient", "diamond", "stripe", "checker", "random", "hit_and_miss"]
     ratio_start: float = Field(default=0, ge=0, le=0.5)
     ratio_end: float = Field(default=0, ge=0, le=0.5)
     size: float | None = Field(default=None, gt=0, le=1)
@@ -41,6 +42,11 @@ class DesignProgram(Schema):
     n_courses: int = Field(ge=3, le=15)
     bricks_per_course: int = Field(ge=4, le=14)
     bond: Literal["running", "stack"]
+    end_treatment: Literal["half_brick", "omit", "none"] = "half_brick"
+    gap_ratio: float | None = Field(default=None, ge=0, le=2)
+    plan_curvature: float | None = Field(default=None, gt=0, description="Circular centreline radius in metres; None uses legacy arc_angle_deg")
+    arc_angle_deg: float = Field(default=0, ge=-90, le=90, description="Signed centreline sweep; zero is straight")
+    required_supports: int = Field(default=1, ge=1, le=2, description="Minimum distinct supporting bricks above the base course")
     rotation_rules: list[RotationRule] = Field(default_factory=list)
     opening_rules: list[OpeningRule] = Field(default_factory=list)
     seed: int
@@ -48,6 +54,8 @@ class DesignProgram(Schema):
 
     @model_validator(mode="after")
     def regions_inside(self) -> "DesignProgram":
+        if self.plan_curvature is not None and self.arc_angle_deg != 0:
+            raise ValueError("Use plan_curvature or arc_angle_deg, not both")
         for rule in [*self.rotation_rules, *self.opening_rules]:
             if rule.region.course_end >= self.n_courses:
                 raise ValueError("Rule region exceeds n_courses")
@@ -55,6 +63,8 @@ class DesignProgram(Schema):
 
 
 class Brick(Schema):
+    brick_type: Literal["full", "half"] = "full"
+    size: list[float] | None = None
     id: str
     course: int = Field(ge=0)
     index: int = Field(ge=0)

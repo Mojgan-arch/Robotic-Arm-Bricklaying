@@ -17,28 +17,37 @@ class Frame:
 class Camera:
     """A calibrated virtual camera with seeded sensor noise."""
 
-    def __init__(self, world: World, eye: list[float] | None = None, resolution: tuple[int, int] | None = None) -> None:
+    def __init__(self, world: World, eye: list[float] | None = None, resolution: tuple[int, int] | None = None,
+                 target: list[float] | None = None) -> None:
         self.world = world
         cfg = world.sim
         self.width, self.height = resolution or (cfg["camera_width"], cfg["camera_height"])
-        self.view = p.computeViewMatrix(eye or cfg["camera_eye"], cfg["camera_target"], [0, 0, 1])
+        self.view = p.computeViewMatrix(eye or cfg["camera_eye"], target or cfg["camera_target"], [0, 0, 1])
         self.projection = p.computeProjectionMatrixFOV(cfg["camera_fov"], self.width / self.height,
                                                        cfg["camera_near"], cfg["camera_far"])
         self.inverse = np.linalg.inv(np.array(self.projection).reshape(4, 4, order="F") @
                                      np.array(self.view).reshape(4, 4, order="F"))
         self.rng = np.random.default_rng(world.config["seed"])
 
-    def capture(self, unproject: bool = True) -> Frame:
+    def capture(self, unproject: bool = True, include_rgb: bool = True) -> Frame:
         """Return pixels and only visible surface points, without pose queries."""
+        lighting = self.world.sim.get("lighting", {})
         _, _, rgba, depth, segmentation = p.getCameraImage(
             self.width, self.height, self.view, self.projection,
             renderer=p.ER_TINY_RENDERER, flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+            shadow=int(not unproject), lightDirection=lighting.get("direction", [-2, -3, 5]),
+            lightAmbientCoeff=lighting.get("ambient", .45), lightDiffuseCoeff=lighting.get("diffuse", .65),
+            lightSpecularCoeff=lighting.get("specular", .35),
             physicsClientId=self.world.cid)
-        depth = np.asarray(depth).reshape(self.height, self.width)
         segmentation = np.asarray(segmentation).reshape(self.height, self.width)
-        rgb = np.asarray(rgba, dtype=np.uint8).reshape(self.height, self.width, 4)[..., :3]
+        rgb = (np.asarray(rgba, dtype=np.uint8).reshape(self.height, self.width, 4)[..., :3]
+               if include_rgb else np.empty((0, 0, 3), dtype=np.uint8))
         if not unproject:
-            return Frame(rgb, depth, segmentation, np.empty((0, 3)), np.empty(0, dtype=int))
+            rgb = rgb.copy()
+            if include_rgb:
+                rgb[segmentation < 0] = [9, 16, 24]
+            return Frame(rgb, np.empty((0, 0)), segmentation, np.empty((0, 3)), np.empty(0, dtype=int))
+        depth = np.asarray(depth).reshape(self.height, self.width)
         yy, xx = np.mgrid[:self.height, :self.width]
         # TinyRenderer uses integer X samples and bottom-up Y raster rows.
         # The Y+1 convention is verified against independently known box surfaces.

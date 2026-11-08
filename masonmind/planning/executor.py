@@ -10,7 +10,7 @@ from masonmind.planning.controller import StaticController
 from masonmind.planning.collision import CollisionChecker
 from masonmind.sim.recorder import Recorder
 from masonmind.planning.rrt_connect import PlanningError, edge_free
-from masonmind.planning.time_param import parameterize
+from masonmind.planning.time_param import parameterize, parameterize_continuous
 
 
 def speed_scale(distance: float, stop: float, slow: float) -> float:
@@ -32,6 +32,7 @@ class MonitoredExecutor(StaticController):
         self.minimum_distance = float("inf")
         self.allow_replan = True
         self.replan_times: list[float] = []
+        self.observer: Callable[[MotionEvent], None] | None = None
 
     def observe(self, force: bool = False) -> None:
         """Refresh the measurement-driven proxy scene on the sensing schedule."""
@@ -55,6 +56,8 @@ class MonitoredExecutor(StaticController):
         event = MotionEvent(t=self.arm.world.t, kind=kind, min_distance_m=value, detail=detail)
         self.events.append(event)
         append_json(self.motion_log, event)
+        if self.observer:
+            self.observer(event)
         if self.recorder:
             self.recorder.state, self.recorder.distance = kind, value
 
@@ -85,7 +88,11 @@ class MonitoredExecutor(StaticController):
     def execute(self, path: list[np.ndarray]) -> None:
         """Advance simulated control ticks, sensing and revalidating remaining edges."""
         world, cfg = self.arm.world, self.config
-        trajectory = parameterize(path, cfg["velocity"], cfg["acceleration"], cfg["control_dt"])
+        contact = self.arm.phase in {"pick", "lift", "place", "retreat"}
+        velocity = min(cfg["velocity"], cfg.get("contact_velocity", cfg["velocity"])) if contact else cfg["velocity"]
+        acceleration = min(cfg["acceleration"], cfg.get("contact_acceleration", cfg["acceleration"])) if contact else cfg["acceleration"]
+        retime = parameterize_continuous if cfg.get("continuous_retiming", False) else parameterize
+        trajectory = retime(path, velocity, acceleration, cfg["control_dt"])
         progress, slowed = 0.0, False
         while progress < trajectory.t[-1]:
             observation_due = world.t >= self.next_observation
@@ -109,7 +116,7 @@ class MonitoredExecutor(StaticController):
                 self.event("stop", distance, "Safety boundary or predicted path collision")
                 self.arm.command(self.arm.state())
                 path = self.replan(trajectory.q[-1])
-                trajectory = parameterize(path, cfg["velocity"], cfg["acceleration"], cfg["control_dt"])
+                trajectory = retime(path, velocity, acceleration, cfg["control_dt"])
                 progress = 0.0
                 continue
             progress = min(trajectory.t[-1], progress + cfg["control_dt"] * scale)

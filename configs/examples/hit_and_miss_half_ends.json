@@ -1,0 +1,12 @@
+{
+  "n_courses": 3,
+  "bricks_per_course": 10,
+  "bond": "running",
+  "gap_ratio": 0.33,
+  "plan_curvature": null,
+  "end_treatment": "half_brick",
+  "rotation_rules": [],
+  "opening_rules": [{"region": {"course_start": 0, "course_end": 2}, "kind": "hit_and_miss"}],
+  "seed": 7,
+  "rationale": "Straight hit-and-miss wall with zero rotation and half-brick end closures"
+}

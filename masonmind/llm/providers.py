@@ -103,7 +103,8 @@ class OllamaClient(HTTPClient):
             messages[0]["images"] = [base64.b64encode(image).decode() for image in images]
         result = self.post(self.config["url"].rstrip("/") + "/api/chat",
             {"model": self.config["model"], "messages": [{"role": "system", "content": system}, *messages],
-             "stream": False, "format": json_schema or "json", "options": {"num_predict": self.config["max_tokens"]}})
+             "stream": False, "think": self.config.get("think", False), "format": json_schema or "json",
+             "options": {**self.config.get("options", {}), "num_predict": self.config["max_tokens"]}})
         self.usage = {"input_tokens": result.get("prompt_eval_count"), "output_tokens": result.get("eval_count")}
         return result["message"]["content"]
 

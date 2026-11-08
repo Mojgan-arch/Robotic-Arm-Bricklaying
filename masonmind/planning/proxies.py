@@ -22,10 +22,10 @@ class ProxyScene:
         self.world.known_ids.add(body)
         return body
 
-    def update_brick(self, name: str, position: list[float], yaw: float) -> None:
+    def update_brick(self, name: str, position: list[float], yaw: float, size: list[float] | None = None) -> None:
         """Install the nominal or measured pose supplied by the orchestrator."""
         self.remove_brick(name)
-        self.bricks[name] = self.box(self.world.config["geometry"]["brick_size"], position, yaw)
+        self.bricks[name] = self.box(size or self.world.config["geometry"]["brick_size"], position, yaw)
 
     def remove_brick(self, name: str) -> None:
         """Remove a known proxy before picking its associated brick."""

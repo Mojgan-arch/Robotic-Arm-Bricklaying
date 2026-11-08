@@ -16,7 +16,13 @@ if (-not (Test-Path -LiteralPath $MasonPython)) {
 switch ($Mode) {
     'test' { & $MasonPython -m pytest -q }
     'design' { & $MasonPython -m masonmind --milestone 5 }
-    'app' { & $MasonPython scripts/app.py }
+    'app' {
+        if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.local-llm\ready.json')) {
+            & (Join-Path $PSScriptRoot 'scripts\start_local_llm.ps1')
+        }
+        $env:MPLCONFIGDIR = Join-Path $PSScriptRoot 'runs\web\matplotlib'
+        & $MasonPython scripts/app.py
+    }
     'experiments' { & $MasonPython experiments/run_all.py --quick }
     'demo' {
         $MasonArguments = @('-m', 'masonmind', '--scenario', $Scenario)

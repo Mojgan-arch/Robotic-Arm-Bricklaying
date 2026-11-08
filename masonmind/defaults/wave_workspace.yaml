@@ -1,0 +1,9 @@
+planning:
+  contact_velocity: 0.8
+  contact_acceleration: 1.5
+scan:
+  extent_recentering: true
+sim:
+  placement_clearance_m: 0.001
+  solver_iterations: 200
+  substeps: 4

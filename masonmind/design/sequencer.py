@@ -50,7 +50,8 @@ def plan_sequence(design: Design, strategy: SequenceStrategy, config: dict[str, 
     center = (design.program.bricks_per_course - 1) / 2
     keys = {"left_to_right": lambda b: b.index, "right_to_left": lambda b: -b.index,
             "center_out": lambda b: abs(b.index - center), "ends_in": lambda b: -abs(b.index - center),
-            "high_rotation_first": lambda b: -abs(b.yaw_deg), "low_rotation_first": lambda b: abs(b.yaw_deg)}
+            "high_rotation_first": lambda b: -abs(b.yaw_deg - cfg["geometry"].get("wall_yaw_deg", 0)),
+            "low_rotation_first": lambda b: abs(b.yaw_deg - cfg["geometry"].get("wall_yaw_deg", 0))}
     order, placed, done, issues = [], [], set(), []
     while len(done) < len(active):
         ready = [b for b in active.values() if b.id not in done and graph[b.id] <= done]

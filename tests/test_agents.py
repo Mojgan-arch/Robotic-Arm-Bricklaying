@@ -1,9 +1,25 @@
 import json
 import pytest
+from masonmind.agents import SiteSupervisor
 from masonmind.config import load_config
 from masonmind.agents import Clarifier
 from masonmind.llm.mock import MockClient
 from masonmind.orchestrator import Orchestrator
+
+
+def test_supervisor_repairs_hallucinated_id_before_execution(tmp_path):
+    class IncorrectThenCorrect:
+        calls=0
+        def complete(self, system, messages, images=None, json_schema=None):
+            self.calls+=1
+            return json.dumps({"action":"REPOSITION", "brick_ids":["brick_0" if self.calls==1 else "c00_b00"], "reasoning":"Correct measured error"})
+    client=IncorrectThenCorrect()
+    agent=SiteSupervisor(client,{**load_config("llm"),"cache":False},tmp_path)
+    result=agent.decide({"allowed_brick_ids":["c00_b00"],"allowed_actions":["REPOSITION"]})
+    assert result.brick_ids==["c00_b00"]
+    assert client.calls==2
+    entries=[json.loads(line) for line in (tmp_path/"llm_log.jsonl").read_text().splitlines()]
+    assert "Unknown/unbuilt" in entries[0]["validation_error"]
 
 
 def test_validation_retries_and_cache(tmp_path):

@@ -46,6 +46,7 @@ def scan_bricks(frames: list[Frame], bricks: list[Brick], instance_ids: dict[str
     cfg, size = config["scan"], config["geometry"]["brick_size"]
     deviations, poses, broken, diagnostics = [], {}, [], {}
     for brick in bricks:
+        size = brick.size or config["geometry"]["brick_size"]
         if brick.is_opening:
             continue
         body = instance_ids.get(brick.id, -2)
@@ -67,6 +68,20 @@ def scan_bricks(frames: list[Frame], bricks: list[Brick], instance_ids: dict[str
         transform = np.linalg.inv(registration.transformation)
         nominal = np.array([brick.x, brick.y, brick.z, 1])
         position = (transform @ nominal)[:3]
+        if cfg.get("extent_recentering", False):
+            # Plane ICP cannot constrain motion tangent to a visible side face.
+            # Near-complete observed extents constrain that translation without
+            # using simulator poses or clamping the estimate to nominal BIM.
+            a = np.deg2rad(brick.yaw_deg)
+            nominal_rotation = np.array([[np.cos(a), -np.sin(a), 0],
+                                         [np.sin(a), np.cos(a), 0], [0, 0, 1]])
+            fitted_rotation = transform[:3, :3] @ nominal_rotation
+            local_points = (points - position) @ fitted_rotation
+            low, high = local_points.min(axis=0), local_points.max(axis=0)
+            coverage = (high - low) / np.asarray(size)
+            complete = ((coverage >= cfg["extent_min_coverage"]) &
+                        (coverage <= cfg["extent_max_coverage"]))
+            position += np.where(complete, (low + high) / 2, 0) @ fitted_rotation.T
         dyaw = float(np.rad2deg(np.arctan2(transform[1, 0], transform[0, 0])))
         delta = (position - nominal[:3]) * 1000
         yaw = brick.yaw_deg + dyaw
@@ -89,4 +104,7 @@ def scan_bricks(frames: list[Frame], bricks: list[Brick], instance_ids: dict[str
         poses[brick.id] = (position.tolist(), yaw)
         diagnostics[brick.id] = {"points": len(points), "fitness": registration.fitness,
                                 "rmse_m": registration.inlier_rmse, "observed_length_m": length, "reliable": reliable}
+        if cfg.get("extent_recentering", False):
+            diagnostics[brick.id].update(extent_coverage=coverage.tolist(),
+                                         extent_corrected_axes=np.flatnonzero(complete).tolist())
     return ScanResult(deviations, poses, broken, diagnostics)

@@ -1,0 +1,21 @@
+{
+  "n_courses": 8,
+  "bricks_per_course": 10,
+  "bond": "stack",
+  "end_treatment": "none",
+  "gap_ratio": 0.333333,
+  "plan_curvature": null,
+  "arc_angle_deg": 0,
+  "required_supports": 1,
+  "rotation_rules": [{
+    "region": {"course_start": 0, "course_end": 7},
+    "kind": "wave",
+    "amplitude_deg": 20,
+    "frequency": 1,
+    "phase_shift_per_course": 0.1,
+    "combine": "override"
+  }],
+  "opening_rules": [],
+  "seed": 7,
+  "rationale": "80-brick wave: sinusoidal brick yaw +/-20 degrees, shifting 0.1 radians per course. One-third-length gaps provide clearance and visible brick ends. Straight centreline; the wave is in brick rotation, not a curved centreline."
+}

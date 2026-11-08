@@ -1,0 +1,14 @@
+{
+  "n_courses": 10,
+  "bricks_per_course": 10,
+  "bond": "running",
+  "end_treatment": "half_brick",
+  "gap_ratio": 0.333333,
+  "plan_curvature": null,
+  "arc_angle_deg": 0,
+  "required_supports": 1,
+  "rotation_rules": [],
+  "opening_rules": [],
+  "seed": 7,
+  "rationale": "105-piece construction regression: uniformly spaced running bond with half-brick ends. Does not represent solid top/bottom courses."
+}

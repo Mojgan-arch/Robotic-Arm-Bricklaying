@@ -59,16 +59,24 @@ class Panda:
         saved = [p.getJointState(self.body, j, physicsClientId=self.world.cid)[:2] for j in self.joints]
         result = None
         try:
-            for _ in range(4):
-                result = np.array(p.calculateInverseKinematics(self.body, self.ee, position, orientation,
-                    maxNumIterations=200, residualThreshold=1e-5, physicsClientId=self.world.cid)[:7])
-                for j, value in zip(self.joints, result):
+            # The current configuration can trap the local solver even at the
+            # repeatedly reached supply pose. Retry from a deterministic home
+            # seed, then let the normal collision planner connect the live arm
+            # to the accepted solution. Never execute the temporary seed state.
+            for seed in ([q for q, _ in saved], self.world.sim["home"]):
+                for j, value in zip(self.joints, seed):
                     p.resetJointState(self.body, j, value, physicsClientId=self.world.cid)
-            actual, _ = self.pose()
-            error = float(np.linalg.norm(np.asarray(actual) - position))
-            if error > self.world.sim["ik_tolerance"] or np.any(result < self.lower) or np.any(result > self.upper):
-                raise RuntimeError(f"IK infeasible at {position}: translation residual {error:.4f} m")
-            return result
+                for _ in range(4):
+                    result = np.array(p.calculateInverseKinematics(self.body, self.ee, position, orientation,
+                        maxNumIterations=200, residualThreshold=1e-5, physicsClientId=self.world.cid)[:7])
+                    for j, value in zip(self.joints, result):
+                        p.resetJointState(self.body, j, value, physicsClientId=self.world.cid)
+                actual, _ = self.pose()
+                error = float(np.linalg.norm(np.asarray(actual) - position))
+                if (error <= self.world.sim["ik_tolerance"] and
+                        np.all(result >= self.lower) and np.all(result <= self.upper)):
+                    return result
+            raise RuntimeError(f"IK infeasible after current/home seeds at {position}: translation residual {error:.4f} m")
         finally:
             for j, (q, velocity) in zip(self.joints, saved):
                 p.resetJointState(self.body, j, q, velocity, physicsClientId=self.world.cid)
@@ -152,7 +160,10 @@ class Panda:
         self.vertical_move(pick.tolist(), source_yaw_deg)
         self.grasp(body)
         desired = p.getQuaternionFromEuler([0, 0, np.deg2rad(yaw_deg)])
-        parent_position, parent_orientation = p.multiplyTransforms(target, desired, *p.invertTransform(*self.hold_transform))
+        # Release above the planned surface when configured, avoiding pressure
+        # on settled lower courses while the brick is still constrained.
+        release_target = (np.asarray(target) + [0, 0, self.world.sim.get("placement_clearance_m", 0.0)]).tolist()
+        parent_position, parent_orientation = p.multiplyTransforms(release_target, desired, *p.invertTransform(*self.hold_transform))
         self.phase = "lift"
         self.vertical_move((pick + [0, 0, height]).tolist(), source_yaw_deg)
         if self.drop_early:

@@ -12,6 +12,8 @@ dist/
 runs/
 .cache/
 memory/rules.jsonl
+memory/*_rules.jsonl
 experiments/results.csv
 experiments/figures/
 .env
+.local-llm/

@@ -2,11 +2,205 @@
 
 Research implementation of robotic masonry with a Franka Panda and task-level LLM agents.
 
-![Recorded Panda construction](assets/masonmind_demo.gif)
+![Simulated Franka Panda assembling a 105-piece perforated wall, shown in successive camera scans](assets/masonmind_105_piece_wall.gif)
 
-Recorded full 12-brick build with a moving obstacle, accelerated approximately 21x.
+Camera snapshots from the simulated build show the perforated wall taking shape. The arm placed all 105 pieces. The maximum final position error in this run was 0.65 mm.
 
 ## Start here
+
+The compact web form places provider/model beside variant/seed, with full-width
+Generate and Build buttons. The example section contains separate wave and
+straight-wall loaders, so the straight regression no longer replaces the wave request.
+
+For the wave wall, select **Load connected wave wall — 100 pieces**, review its preview,
+then **2. Build reviewed design**. `configs/examples/connected_wave_wall.json` specifies
+8 running-bond courses and 12 nominal positions per course: 92 full bricks and
+8 half bricks at the ends of shifted courses. Narrow gaps are 12% of brick length.
+The staggered courses connect neighbouring stacks, replacing the earlier separated
+80-brick fins. Sinusoidal yaw remains ±20 degrees, one cycle per course,
+with a phase advance of 0.1 radians per course. No bricks are omitted.
+The centreline is straight: this implements the requested wave in brick rotation,
+not a sinusoidal centreline. The loader compiles and verifies a saved program;
+it does not claim that a language model generated it. The selected provider
+supervises subsequent construction.
+The connected wall spans approximately 0.726 m along the worktable and is
+0.128 m high. Its geometry has zero verifier issues; the loader regression
+checks all 100 pieces, placement order, intermediate gravity tests and a single
+connected support network (not disconnected stacks).
+The 150-piece, 12-course trial failed at 112 placements after an upper brick fell
+and corrective grasping failed (`runs/runtime_connected_wave150.json`). It is
+not the default or a completed acceptance run. Its first eight courses were
+physically placed and passed all eight scans. The current 100-piece geometry is
+exactly that validated prefix, checked against saved poses and scan reports in
+`runs/connected_wave100_checkpoint.json`. This is checkpoint evidence, not a
+separately measured completed 100-piece run. A proposed limited-finger-opening
+change did not reproduce the failure in a focused diagnostic and was not retained.
+`configs/connected_wave_workspace.yaml` keeps contact moves at the normal 0.8 rad/s and
+1.5 rad/s² while retaining fast free-space transfers. Wave placements release
+1 mm above the nominal surface and settle under gravity. Two internal physics
+substeps and 100 solver iterations improve contact resolution for these small,
+rotated bricks; the normal simulation profile is unchanged. It also resolves the
+point-to-plane ICP sliding ambiguity using observed cuboid extents only when
+the observed span is 95–105% of the nominal dimension on that axis. It never reads simulator poses or clamps a
+measurement to the design; a regression preserves detection of a real 4 mm
+shift from side-face-only observations. Scan tolerances are unchanged.
+
+The earlier separated-fin wave (`wave_wall.json`, `wave_workspace.yaml`, four
+substeps/200 iterations) completed **80/80 placements and eight
+accepted course scans**: maximum evaluation displacement 0.368 mm and orientation
+error 0.559 degrees, no collapse and no corrective placements. Evidence:
+`runs/runtime_wave80_substeps.json`, run `20261101T183115_b0b50789`.
+This was a clean B3, seed-7, MockClient run with memory and live rendering disabled,
+under cProfile: 1214.225 s (20 min 14 s). It validates this simulation construction,
+not local-model reasoning, hardware accuracy or a live-UI speedup. Earlier
+coarser-contact trials failed despite passing initial geometry checks; those
+failures are retained in `runs/runtime_wave80*.json`. That UI was restarted,
+the wave loaded, and its 80-brick preview and enabled Build button verified.
+Regression validation: 95 tests passed; after contact-resolution configuration,
+all 15 simulation/perception/UI tests were rerun and passed (dependency warnings only).
+
+Inspect the current connected wall offline with `python scripts/inspect_design.py configs/examples/connected_wave_wall.json --output runs/connected_wave_inspection`.
+Run the full offline construction with
+`python scripts/benchmark_runtime.py --program configs/examples/connected_wave_wall.json --profile configs/connected_wave_workspace.yaml --label connected_wave100 --speed 3 --continuous --sleeping`.
+
+The UI workspace YAML now selects an accelerated **simulation** motion profile
+(velocity 2.4 rad/s, acceleration 13.5 rad/s², continuous sampled retiming).
+Dense vertical IK samples no longer each require a complete stop. Retiming
+interpolates the existing polyline and checks finite-difference velocity and
+acceleration at the control rate, including rest at both ends. Sharp paths can
+fall back to conservative waypoint timing. This is not a continuous-time
+corner-blending or hardware guarantee. These are demo simulation settings,
+not physical Panda operating limits. CLI/research defaults remain unchanged.
+The UI enables Bullet's automatic sleeping for settled dynamic bricks; they
+retain mass and collision response and wake on contact. No bricks are frozen
+or made static. A regression checks both gravity settling and contact wake-up.
+Physics timestep, settling, monitoring interval, scan resolution and live-image
+resolution are retained. Obstacle monitoring avoids converting an unused RGB
+buffer, and display-only frames avoid converting unused depth; sensor point
+clouds are regression-tested for equality.
+
+Measured clean 12-brick B3 offline benchmark, including live frames and scans:
+102.784 s original / 87.127 s previous contact-limited profile / 31.670 s new
+continuous profile (**3.25× original; 2.75× previous**). All three completed,
+maximum final displacement below 0.047 mm. The moving-obstacle trial completed
+with one stop, one successful replan and zero scripted-obstacle contact ticks.
+An earlier aggressive 4.8 rad/s profile failed at 94/105; it is not used here.
+These timings exclude real-model waiting time and are individual local trials.
+The 105-piece straight perforated wall completed with this final profile in
+849.063 s (14 min 9 s), with 965 live frames, one REPOSITION intervention, no
+collapse, and maximum evaluation displacement 0.645 mm. The corresponding
+continuous-profile trial without sleeping completed in 1383.977 s. These runs
+used MockClient, seed 7, B3 and disabled memory; concurrent local work varied,
+so they are functional/performance observations, not controlled statistical
+speedup claims. Full evidence: `runs/runtime_continuous3_sleep_large.json`.
+The restarted web UI was also exercised through Generate/Build: 12/12 bricks
+completed in 32.175 s with live images (`runs/20261101T164242_a851f65c`).
+Evidence: `runs/runtime_baseline.json`, `runs/runtime_fast_contact.json`,
+`runs/runtime_continuous3_sleep.json`, `runs/runtime_continuous3_sleep_obstacle.json`.
+Full regression suite after retiming and sleeping changes: 92 tests pass (15 dependency
+deprecation warnings).
+Reproduce a fast offline trial with
+`python scripts/benchmark_runtime.py --label continuous3_sleep --speed 3 --continuous --sleeping`.
+
+For the demonstrated wall, use **Load tested 105-piece wall**, then **2. Build
+reviewed design**. Loading uses the saved program, ignores the text box and
+rechecks geometry, placement order and intermediate stability; it does not ask
+the Architect to regenerate the wall. Construction uses the selected provider.
+This avoids a measured local-model failure that combined explicit gaps with an
+extra gradient brick-removal mask. General text generation remains separate.
+The UI now identifies deterministic stability/reachability stages instead of
+leaving the preceding agent's name on a growing timer. Validation: 87 tests pass.
+
+### What is and is not demonstrated
+
+The default offline fixture is **not text-to-design intelligence**. It ignores
+the requested pattern and returns a fixed repairable wall. The previous recorded
+demo demonstrates robot/perception integration, not a functioning connected LLM team.
+Select an actual provider and model for language-driven operation. Missing keys or
+an unavailable local model fail explicitly; there is no silent fixture fallback.
+The prepared Windows workspace now includes Ollama 0.40.0 and `qwen3.5:4b`.
+The local model runs on the laptop GPU without an API key. Separate agent roles
+use this same model with different prompts and schemas.
+
+| Requested capability | Current evidence / remaining validation |
+| --- | --- |
+| Multiple design roles | Local-model design/review decisions and three construction supervisor reviews measured; broad model quality not established |
+| Generative parametric wall | Local model generated and passed checks for an 8-course, 10-brick wave wall and a contrasting straight 3-by-4 wall |
+| LLM during construction | Supervisor called on every course, planning failures and recovered obstacle stops |
+| Two-level correction | Sampled motion replanning and scan-based physical correction implemented; current events stream to UI |
+| Deterministic geometry/motion | Model outputs task-level DSL/actions; algorithms compute all poses and trajectories |
+| Learning from incidents | Evidence-backed rule retrieval; no claim that errors cannot recur or that memory improves outcomes |
+
+Provider-specific UI memory files keep fixture rules out of real-model runs.
+The camera stream is a live simulation view with throttled updates, not a
+wall-clock real-time safety controller. Measurements come from the sensing path;
+ground-truth evaluation remains separate. Archived examples are explicitly labelled.
+The robot display uses a 960×720 camera, a dark blue technical-grid floor and a fullscreen
+image that scales to the available viewport. Display framing is separate from
+the sensing camera calibration.
+The studio uses the articulated Panda visual meshes, metallic light/dark
+materials and display-camera shadows. This is a rendered simulation, not a
+photorealistic hardware digital twin. Display background compositing does not
+alter depth or segmentation supplied to perception.
+Supervisor actions now validate exact placed-brick IDs and permitted actions
+before execution; invalid model outputs receive bounded repair attempts instead
+of attempting corrections on invented bricks. Conforming scan rows are summarized
+for the model, while all measured deviations remain in scan artifacts. The
+regression suite includes the previous `brick_0` hallucination case.
+
+Studio update validation (2026-11-01): **86 offline tests passed**. Browser
+inspection confirmed both preview panels remain visible and the robot fullscreen
+image scales to the viewport. The portable 105-piece construction regression is
+`python scripts/validate_large_build.py` (offline fixture by default); add
+`--provider ollama` to use the installed local model. This test uses uniform
+one-third gaps, half end bricks and disabled memory, and does not establish
+support for solid top/bottom courses or a memory benefit.
+The first large regression reached 68/105 pieces before the local IK solver
+stalled returning to the supply pose (`runs/20261101T112701_cdffcecd/`). IK now
+retries from the configured home seed when the current-state seed is invalid,
+preserves the live joint state, and retains the same residual/joint-limit checks
+and collision-planned execution. A regression test covers this fallback.
+The browser workflow also completed a new local-model 12/12-brick build in
+142.1 seconds with live frames, three supervisor reviews and no corrections
+(`runs/20261101T115333_d45bd111/`). The visual critic still misinterpreted course
+count and perspective in this trial; its advisory score is not accuracy evidence.
+The next large run placed 105/105 pieces and corrected two course-9 bricks, but
+failed final acceptance when the model returned ACCEPT for an out-of-tolerance
+end brick (`runs/20261101T115207_848f060f/`). Nonconforming scan evidence now
+excludes ACCEPT from permitted actions during bounded output repair, while the
+independent execution guard remains. Replaying that scan with the local model
+returned REPOSITION for the exact end-brick ID; it did not execute a physical
+correction by itself (`runs/20261101T123905_baeef98c/`).
+The final continuous construction run **completed 105/105 pieces** in 2749.8 s
+(`runs/20261101T123950_85688b3e/report.json`). It made ten course ACCEPT decisions
+and one REPOSITION decision targeting two bricks, followed by a conforming rescan.
+Final simulator-evaluation displacement was mean 0.206 mm / max 0.468 mm; no
+collapse was detected. There were 21 agent requests (4 fresh local-model calls,
+17 cached responses). All final scan rows were within tolerance. This clean,
+headless trial disabled display frames and memory; it does not validate moving
+obstacles, memory benefit, hardware performance or visual-critic accuracy.
+
+Follow-up validation: 61 offline tests pass, including event ordering, distinct
+role decisions, failed-design repair visibility, missing-key rejection without
+fallback, mandatory conforming-course review and rejection of unsafe ACCEPT.
+These tests validate software behavior, not live language-model performance.
+An additional explicit local-model run on 2026-10-07 completed 12/12 bricks in
+the clean scenario, with three supervisor ACCEPT decisions and three image-critic
+responses. It made 22 uncached model calls across design and construction; the
+straight design required two review repairs. Evidence is saved locally in
+`runs/local_llm_acceptance.json` and `runs/20261007T205553_62a3fe13/`.
+The earlier 80-brick wave design passed geometry, sequence, finite gravity and
+target reachability checks (`runs/20261007T205500_60a3f86f/`); full construction was
+not validated at that stage. The current saved wave and measured construction
+are documented under Start here. Local-model obstacle recovery, corrective placement and
+memory benefit are not established by this clean run. The image critic assigned
+an intent-match score of 2; this should not be described as demonstrated visual
+reasoning accuracy.
+Browser integration run `20261006T084114_afbf67c4` completed 12/12 bricks with
+one stop, one replan, zero scripted-obstacle contact ticks and four fixture
+supervisor ACCEPT decisions (motion recovery plus three courses). The current
+camera and scan events were displayed during construction. This remains a
+MockClient integration run, not proof of the six requested LLM capabilities.
 
 The prepared Windows environment can run directly:
 
@@ -17,10 +211,62 @@ The prepared Windows environment can run directly:
 .\run.ps1 -Mode test
 ```
 
-The optional Gradio interface opens at http://127.0.0.1:7860. Generate a design,
-review its placement animation and agent outputs, then start construction.
-The construction video and measured deviations appear after completion; the UI
-does not stream live video. Install `pip install -e ".[ui]"` in a fresh environment.
+`-Mode app` starts the installed local Ollama service if needed, then opens the
+server. The dashboard selects **Ollama — local LLM**, model **qwen3.5:4b** when
+`.local-llm/ready.json` exists. Click Generate and verify, then Build reviewed
+design. No cloud key is required, and opening the page does not call the model.
+Runtime/model files stay in ignored `.local-llm/`; installation is specific to
+this prepared workspace. See [official Windows instructions](https://docs.ollama.com/windows)
+for a fresh machine. `configs/llm_local.yaml` configures the loopback service;
+the default CLI and tests retain offline `configs/llm.yaml` and require no model.
+The optional `scripts/validate_local_llm.py` makes real local-model calls and is
+deliberately excluded from offline pytest.
+
+The UI workcell uses a fixed 90-degree wall orientation in
+`configs/ui_workspace.yaml` so larger walls extend across the reachable workspace.
+The compiler, not the model, applies this transform. Unspecified wave amplitude
+and layer phase shift default to 15 degrees and 0.15 radians per course in YAML;
+explicit user requirements take precedence and straight walls get no wave.
+
+The optional Gradio interface opens at http://127.0.0.1:7860. A freshly rendered
+idle Panda is visible in the robot workspace on page
+load, without a model call or a build. The design preview appears after verification.
+Choose the provider
+and exact model name, then explicitly start design. Nothing calls a model on load.
+The offline fixture does not interpret text; it is only an integration test.
+The build button becomes available after successful verification. Generate a design,
+review its completed-wall preview and agent outputs, then start construction.
+The preview renders once rather than encoding one GIF frame per brick, so an
+approved large design no longer waits for a lengthy animation before enabling Build.
+Clarification is a normal pause: questions appear with an answer field and
+Continue button, preserving the original request. New text invalidates the old
+build state. Waiting workers display elapsed time; model calls retain their
+configured timeout. Every arbitrary prompt is not guaranteed buildable: the
+current DSL supports straight/circular-arc centrelines (`arc_angle_deg`),
+lengthwise yaw interpolation (`length_gradient`, `start_deg` to `amplitude_deg`),
+and deterministic alternating omissions (`hit_and_miss`). Brick yaw follows the
+arc tangent plus the requested pattern. Other unsupported requests need an agreed
+alternative; the clarifier must not silently discard them. All construction
+remains gated by deterministic checks.
+
+`required_supports=2` explicitly requires two distinct contacting bricks below
+each upper brick, in addition to existing support-area and centre-of-mass checks.
+Alternating omissions count grid slots: 14 slots yield 7 solid bricks, not 14.
+The requested 12-by-14 running-bond alternating pattern is rejected by the
+current workcell length/support checks; adding arc support does not make that
+specific geometry buildable. No limits were relaxed to obtain approval.
+`scripts/validate_curved_geometry.py` checks a 3-by-6 solid curved wall with
+20-degree sweep and a 0-to-15-degree lengthwise yaw gradient: geometry, finite
+drop test and target reachability pass. This is not a full construction test.
+Evidence and preview are saved under ignored `runs/curved_geometry/`.
+Geometry follow-up: 69 offline tests pass. An additional real Ollama/Qwen design
+run (`runs/20261008T080340_9d150a9c/`) interpreted the 3-by-6, 20-degree arc,
+0-to-15-degree gradient brief and approved the correct program. Full robotic
+construction of that curved design remains untested.
+During construction, live camera snapshots, role decisions, motion events, scans,
+heatmaps and new memory rules stream from the current worker. Optional MP4 recording
+is off by default. Archived examples are separate from the current run.
+Install `pip install -e ".[ui]"` in a fresh environment.
 The default CLI now runs the entire pipeline; use `--no-video` for faster runs.
 
 ```mermaid
@@ -39,7 +285,7 @@ flowchart LR
   Memory --> Agents
 ```
 
-**Verified delivery:** 53 automated tests pass. A complete quick experiment matrix
+**Earlier benchmark (before live-dashboard changes):** 53 automated tests passed. A complete quick experiment matrix
 contains 36 trials: B0 completed 3/9, B1 5/9, B2 6/9 and B3 6/9 (20/36 total).
 The difficult noisy-placement, early-drop and combined scenarios fail in this
 seed-0 coarse-sampling matrix; failures remain in the CSV. B2 and B3 being equal
@@ -181,16 +427,68 @@ still produce placement error, which must be measured rather than assumed zero.
 | --- | --- |
 | `n_courses`, `bricks_per_course` | 3–15 courses; 4–14 cells per course |
 | `bond` | `stack` or `running` |
-| Rotation `kind` | `wave`, `zigzag`, `twist_gradient`, `alternate`, `constant` |
+| `end_treatment` | `half_brick` (default): shifted running-bond courses use n−1 full bricks plus two half bricks, aligned with the wall ends. `omit`: remove the overhanging final brick. `none`: retain legacy overhangs. Stack bond is unchanged. |
+| `gap_ratio` | Optional 0–2 clear gap divided by brick length; pitch is length × (1 + gap). Null keeps configured pitch and legacy offsets. Explicit running bond shifts half the pitch. |
+| `plan_curvature` | Optional positive circular radius in metres (despite its name); null means straight unless legacy arc sweep is provided. |
+| `arc_angle_deg` | Legacy signed sweep −90…90°; mutually exclusive with a radius. |
+| `required_supports` | Minimum distinct supporting bricks, 1 or 2; additional to area and COM guards. |
+| Rotation `kind` | `wave`, `zigzag`, `twist_gradient`, `length_gradient`, `alternate`, `constant` |
+| `start_deg` | Start yaw for length_gradient; amplitude_deg is its end yaw. |
 | `amplitude_deg`, `frequency` | 0–45 degrees; positive frequency |
 | `combine` | Apply rules in order using `add` or `override` |
-| Opening `kind` | `gradient`, `diamond`, `stripe`, `checker`, `random` |
+| Opening `kind` | `gradient`, `diamond`, `stripe`, `checker`, `random`, `hit_and_miss` |
 | `ratio_start`, `ratio_end` | Removal probabilities from 0 to 0.5 |
 | Opening `size` | Optional normalized geometric opening extent, greater than 0 and at most 1 |
 | `region` | Inclusive course indices and normalized wall interval `u` |
 
 The strict schema rejects extra fields. The compiler computes coordinates and the
 verifier can reject a schema-valid program. See `tests/test_design.py` for examples.
+
+With explicit `gap_ratio`, hit-and-miss gaps come from spacing the solid bricks;
+it does not also delete alternate solids. Other opening rules still remove cells.
+Without gap_ratio, legacy hit_and_miss still removes alternate grid slots.
+COM must lie in the convex hull of actual contact polygons, eroded by
+`geometry.com_margin_m` (0.0001 m by default). Support passes at
+`min_support_ratio=0.50`, or with two contacting bricks and at least
+`min_contact_per_side=0.15` on each longitudinal half and total
+`min_bridge_support_ratio=0.35`. Full contacts, not the hull area, determine those
+ratios. These thresholds live in YAML; the hull never invents contact area.
+
+Repair feedback groups checks by course/index parity and measured ranges; complete
+issues remain in `verification_v*.json`. Hints sample feasible intervals then use
+binary refinement for gap at zero pattern yaw and rotation at the current gap.
+They preserve counts, openings and curve, and check geometry only. Null means no
+sampled feasible value; it is not permission to bypass checks. Two consecutive
+unchanged repair attempts stop early (numeric jitter/prose ignored), with an
+explicit MockClient warning for offline runs.
+
+Bridge regression: 79 tests pass. `scripts/validate_bridge_wall.py` records the
+straight 3×6 running-bond hit-and-miss case, gap 0.33 and yaw gradient 0–20°.
+All 10 interior upper bricks pass; the two unsupported end bricks fail support
+and COM. No feasible whole-wall gap/angle was found with the edges unchanged.
+Evidence: `runs/bridge_wall_033_20/result.json`, full issues and preview alongside.
+
+End-treatment follow-up: half stock has separate size, mass and pickup location
+in `geometry.brick_types.half`. Physics bodies, collision proxies, scanning models,
+IFC export and construction pickup use the correct type. Required-support counts
+still apply to half bricks; two-support requirements can reject an end closure.
+Dimension failures report length/height/depth and the workspace limits; repair
+feedback includes `max_bricks_per_course_dimensions` at the current gap and curve.
+This hint checks dimensions only, not complete structural feasibility.
+
+Inspect a JSON program with:
+```powershell
+.\.venv311\Scripts\python.exe scripts/inspect_design.py configs/examples/hit_and_miss_half_ends.json --output runs/inspect_half_ends
+```
+The default inspection uses the UI workcell (wall yaw 90°); `--config` selects a
+different full YAML configuration. It saves `top.png`, `front.png`, compiled design
+and verification JSON. Red denotes failed bricks; a wall-wide failure marks all
+bricks red. Blue bounds show length/depth/height limits and the purple plan circle
+is the radial workspace projection. Failed design rounds save these views under
+`inspection_vN/` in their run folder.
+End-treatment regression suite: 83 tests pass. The supplied straight, zero-yaw 3-course × 10-brick, gap-0.33 example passes all
+geometric checks and the finite gravity test: 29 full bricks and 2 half bricks,
+0.70038 m long × 0.048 m high × 0.026 m deep. Full robotic construction is untested.
 
 ## Configuration and outputs
 

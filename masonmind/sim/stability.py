@@ -15,7 +15,7 @@ def drop_test(bricks: list[Brick], config: dict[str, Any] | None = None) -> Stab
     with World(isolated, robot=False) as world:
         active = [b for b in bricks if not b.is_opening]
         for brick in active:
-            world.spawn_brick(brick.id, [brick.x, brick.y, brick.z], brick.yaw_deg)
+            world.spawn_brick(brick.id, [brick.x, brick.y, brick.z], brick.yaw_deg, brick_type=brick.brick_type)
         world.step(cfg["sim"]["stability_steps"])
         for brick in active:
             pos, orn = p.getBasePositionAndOrientation(world.bricks[brick.id], physicsClientId=world.cid)

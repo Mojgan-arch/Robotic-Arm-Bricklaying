@@ -19,11 +19,16 @@ class World:
         p.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=self.cid)
         p.setGravity(0, 0, self.sim["gravity"], physicsClientId=self.cid)
         p.setTimeStep(self.sim["dt"], physicsClientId=self.cid)
-        p.setPhysicsEngineParameter(deterministicOverlappingPairs=1, numSolverIterations=100, physicsClientId=self.cid)
+        p.setPhysicsEngineParameter(deterministicOverlappingPairs=1,
+                                   numSolverIterations=self.sim.get("solver_iterations", 100),
+                                   numSubSteps=self.sim.get("substeps", 0), physicsClientId=self.cid)
         self.plane = p.loadURDF("plane.urdf", physicsClientId=self.cid)
+        p.changeVisualShape(self.plane, -1, textureUniqueId=-1, rgbaColor=[1, 1, 1, 1], physicsClientId=self.cid)
         self.table = self.box(self.sim["table_size"], self.sim["table_center"], mass=0, color=(0.28, 0.34, 0.40, 1))
         self.robot = p.loadURDF("franka_panda/panda.urdf", useFixedBase=True,
                                flags=p.URDF_USE_SELF_COLLISION, physicsClientId=self.cid) if robot else None
+        from masonmind.sim.studio import apply_studio
+        apply_studio(self.cid, self.plane, self.robot)
         self.known_ids = {self.plane, self.table}
         if self.robot is not None:
             self.known_ids.add(self.robot)
@@ -43,16 +48,22 @@ class World:
                          linearDamping=self.sim["linear_damping"], angularDamping=self.sim["angular_damping"],
                          collisionMargin=self.sim["collision_margin_m"], frictionAnchor=1,
                          physicsClientId=self.cid)
+        if mass > 0 and self.sim.get("enable_sleeping", False):
+            p.changeDynamics(body, -1, activationState=p.ACTIVATION_STATE_ENABLE_SLEEPING,
+                             physicsClientId=self.cid)
         return body
 
     def spawn_brick(self, name: str, position: list[float] | None = None,
-                    yaw_deg: float = 0, length_scale: float = 1) -> int:
+                    yaw_deg: float = 0, length_scale: float = 1, brick_type: str = "full") -> int:
         """Add stock; return its body ID for known-instance segmentation."""
         if name in self.bricks:
             raise ValueError(f"Brick already exists: {name}")
-        size = list(self.config["geometry"]["brick_size"])
+        spec = self.config["geometry"]["brick_types"].get(brick_type, {})
+        if brick_type not in {"full", *self.config["geometry"]["brick_types"]}:
+            raise ValueError(f"Unknown brick type: {brick_type}")
+        size = list(spec.get("size", self.config["geometry"]["brick_size"]))
         size[0] *= length_scale
-        body = self.box(size, position or self.sim["supply"], self.sim["brick_mass"], yaw_deg)
+        body = self.box(size, position or spec.get("supply", self.sim["supply"]), spec.get("mass", self.sim["brick_mass"]), yaw_deg)
         self.bricks[name] = body
         self.known_ids.add(body)
         return body

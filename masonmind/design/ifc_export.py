@@ -33,6 +33,7 @@ def export_ifc(design: Design, sequence: AssemblySequence, path: Path, config: d
     elements = []
     order = {name: index for index, name in enumerate(sequence.order)}
     for brick in design.bricks:
+        length, width, height = brick.size or (config or load_config())["geometry"]["brick_size"]
         if brick.is_opening:
             continue
         profile = file.create_entity("IfcRectangleProfileDef", ProfileType="AREA", XDim=length, YDim=width)

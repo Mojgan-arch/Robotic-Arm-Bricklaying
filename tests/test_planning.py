@@ -4,7 +4,7 @@ import pybullet as p
 from masonmind.config import load_config
 from masonmind.planning.rrt_connect import rrt_connect, edge_free, PlanningError
 from masonmind.planning.smoothing import shortcut
-from masonmind.planning.time_param import parameterize
+from masonmind.planning.time_param import parameterize, parameterize_continuous
 from masonmind.planning.collision import CollisionChecker
 from masonmind.sim.env import World
 from masonmind.sim.robot import Panda
@@ -45,6 +45,28 @@ def test_checker_restores_robot_and_detects_obstacle():
         checker.scene.append(obstacle)
         assert not checker(before)
         assert np.allclose(arm.state(), before)
+
+
+def test_continuous_retiming_dense_straight_path():
+    path = [np.array([x, x / 2]) for x in np.linspace(0, .4, 81)]
+    result = parameterize_continuous(path, .8, 1.5, 1 / 60)
+    previous = parameterize(path, .8, 1.5, 1 / 60)
+    assert result.t[-1] < previous.t[-1] / 3
+    assert np.allclose(result.q[:, 1], result.q[:, 0] / 2)
+    assert np.allclose(result.q[[0, -1]], [path[0], path[-1]])
+    velocities = np.diff(result.q, axis=0) / (1 / 60)
+    assert np.max(np.abs(velocities)) <= .8 + 1e-9
+    accelerations = np.diff(np.vstack([np.zeros(2), velocities, np.zeros(2)]), axis=0) / (1 / 60)
+    assert np.max(np.abs(accelerations)) <= 1.5 + 1e-9
+
+
+def test_continuous_retiming_corner_does_not_cut_geometry():
+    result = parameterize_continuous([np.array([0., 0.]), np.array([.1, 0.]),
+                                     np.array([.1, .1])], .8, 1.5, 1 / 60)
+    assert np.all(np.isclose(result.q[:, 1], 0) | np.isclose(result.q[:, 0], .1))
+    velocity = np.diff(result.q, axis=0) * 60
+    acceleration = np.diff(np.vstack([np.zeros(2), velocity, np.zeros(2)]), axis=0) * 60
+    assert np.max(np.abs(acceleration)) <= 1.5 + 1e-9
 
 
 def test_held_brick_is_checked_and_restored():

@@ -1,4 +1,4 @@
-"""Synchronized trapezoidal profiles with zero velocity at each waypoint."""
+"""Conservative waypoint profiles and bounded sampled polyline retiming."""
 from dataclasses import dataclass
 import numpy as np
 
@@ -8,6 +8,41 @@ class Trajectory:
     t: np.ndarray
     q: np.ndarray
     dq: np.ndarray
+
+
+def parameterize_continuous(path: list[np.ndarray], velocity: float, acceleration: float,
+                            dt: float) -> Trajectory:
+    """Traverse the original polyline without stopping at every IK sample.
+
+    Retiming preserves every geometric segment. Finite-difference velocity and
+    acceleration, including rest at both ends, are bounded at the control rate.
+    This is a sampled controller guarantee, not continuous-time corner blending.
+    """
+    if not path or dt <= 0 or velocity <= 0 or acceleration <= 0:
+        raise ValueError("A nonempty path and positive motion limits are required")
+    points = np.asarray(path, dtype=float)
+    lengths = np.max(np.abs(np.diff(points, axis=0)), axis=1)
+    points = points[np.r_[True, lengths > 1e-12]]
+    if len(points) == 1:
+        return Trajectory(np.array([0.]), points.copy(), np.zeros_like(points))
+    distances = np.r_[0., np.cumsum(np.max(np.abs(np.diff(points, axis=0)), axis=1))]
+    duration = max(2 * distances[-1] / velocity, np.sqrt(6 * distances[-1] / acceleration), dt)
+    for _ in range(30):
+        count = int(np.ceil(duration / dt))
+        times = np.arange(count + 1) * dt
+        u = times / times[-1]
+        progress = distances[-1] * (3 * u ** 2 - 2 * u ** 3)
+        q = np.column_stack([np.interp(progress, distances, points[:, j]) for j in range(points.shape[1])])
+        segment_velocity = np.diff(q, axis=0) / dt
+        padded_velocity = np.vstack([np.zeros(points.shape[1]), segment_velocity, np.zeros(points.shape[1])])
+        peak_v = np.max(np.abs(segment_velocity))
+        peak_a = np.max(np.abs(np.diff(padded_velocity, axis=0) / dt))
+        factor = max(peak_v / velocity, np.sqrt(peak_a / acceleration))
+        if factor <= 1 + 1e-9:
+            return Trajectory(times, q, np.vstack([np.zeros(points.shape[1]), segment_velocity]))
+        duration = times[-1] * max(1.05, factor * 1.02)
+    # Very sharp paths retain the conservative stop-at-waypoint implementation.
+    return parameterize(path, velocity, acceleration, dt)
 
 
 def parameterize(path: list[np.ndarray], velocity: float | np.ndarray, acceleration: float | np.ndarray,

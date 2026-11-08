@@ -80,6 +80,57 @@ def test_loaded_brick_cannot_be_extracted(tmp_path):
         session.apply_decision(SupervisorDecision(action="REPOSITION", brick_ids=["c00_b00"], reasoning="unsafe"))
 
 
+def test_course_acceptance_cannot_override_failed_scan(tmp_path):
+    session = make_session(tmp_path)
+    session.variant = "B3"
+    session.scan = lambda bricks: SimpleNamespace(deviations=[SimpleNamespace(within_tolerance=False)], broken_ids=[])
+    session.supervisor = lambda **evidence: SupervisorDecision(action="ACCEPT", reasoning="incorrect approval")
+    with pytest.raises(RuntimeError, match="cannot override"):
+        session.after_course(0)
+
+
+def test_invalid_accept_is_repaired_before_execution(tmp_path):
+    import json
+    from masonmind.schemas import BrickDeviation
+    session = make_session(tmp_path)
+    session.controller = None
+    session.done = ["c00_b00"]
+
+    class RetryClient:
+        calls = 0
+
+        def complete(self, system, messages, images=None, json_schema=None):
+            self.calls += 1
+            return json.dumps({"action": "ACCEPT" if self.calls == 1 else "REPOSITION",
+                "brick_ids": [] if self.calls == 1 else ["c00_b00"], "reasoning": "review"})
+
+    client = RetryClient()
+    session.owner.client = client
+    deviation = BrickDeviation(brick_id="c00_b00", dx_mm=0, dy_mm=0, dz_mm=0,
+                               dyaw_deg=3, missing=False, within_tolerance=False)
+    decision = session.supervisor(course=0, deviations=[deviation], broken_ids=[])
+    assert decision.action == "REPOSITION"
+    assert client.calls == 2
+    assert session.interventions.get("ACCEPT", 0) == 0
+    entries = [json.loads(line) for line in (tmp_path / "llm_log.jsonl").read_text().splitlines()]
+    assert "Action must be one of" in entries[0]["validation_error"]
+
+
+def test_supervisor_reviews_even_a_conforming_course(tmp_path):
+    session = make_session(tmp_path)
+    session.variant = "B3"
+    session.scan = lambda bricks: SimpleNamespace(deviations=[SimpleNamespace(within_tolerance=True)], broken_ids=[])
+    reviewed = []
+    def supervise(**evidence):
+        reviewed.append(evidence)
+        return SupervisorDecision(action="ACCEPT", reasoning="measured conformance")
+    session.supervisor = supervise
+    session.review_course = lambda course, scan: None
+    session.after_course(0)
+    assert len(reviewed) == 1
+    assert reviewed[0]["course"] == 0
+
+
 def test_phase_b_rejects_incomplete_order(tmp_path):
     session = make_session(tmp_path)
     session.sequence.order = session.sequence.order[:-1]

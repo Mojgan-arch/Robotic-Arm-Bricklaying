@@ -1,0 +1,18 @@
+{
+  "n_courses": 8,
+  "bricks_per_course": 12,
+  "bond": "running",
+  "end_treatment": "half_brick",
+  "gap_ratio": 0.12,
+  "plan_curvature": null,
+  "arc_angle_deg": 0,
+  "required_supports": 1,
+  "rotation_rules": [{
+    "region": {"course_start": 0, "course_end": 7},
+    "kind": "wave", "amplitude_deg": 20, "frequency": 1,
+    "phase_shift_per_course": 0.1, "combine": "override"
+  }],
+  "opening_rules": [],
+  "seed": 7,
+  "rationale": "Interlocking running-bond wave wall: 8 courses, 12 nominal positions per course, half-brick ends on shifted courses; 100 actual pieces. Narrow joints replace separated stack-bond fins. Uses the eight-course prefix successfully built and scanned during the taller-wall trial."
+}
