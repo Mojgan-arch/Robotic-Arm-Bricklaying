@@ -1,4 +1,4 @@
-# Robotic Arm Bricklaying Simulation
+# Robotic Arm Bricklaying
 
 A simulated Franka Panda robotic arm picks and places bricks to build a wave-pattern wall. The Python project uses PyBullet for simulation, RRT-Connect for motion planning, and RGB-D scans to verify each course.
 
