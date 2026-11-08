@@ -2,9 +2,9 @@
 
 Research implementation of robotic masonry with a Franka Panda and task-level LLM agents.
 
-![Simulated Franka Panda assembling a 105-piece perforated wall, shown in successive camera scans](assets/masonmind_105_piece_wall.gif)
+![Eight camera scans show the simulated Franka Panda building a connected wave wall, from 12 pieces in the first course to 100 in the eighth.](assets/masonmind_connected_wave.gif)
 
-Camera snapshots from the simulated build show the perforated wall taking shape. The arm placed all 105 pieces. The maximum final position error in this run was 0.65 mm.
+**Connected wave wall.** Brick orientations vary along each course by up to 20 degrees in either direction. The staggered courses connect the wall, and shifting the rotation pattern between courses gives its face a wave. The animation uses camera snapshots from eight accepted course scans in PyBullet, ending at the 100-piece checkpoint. The longer 150-piece trial stopped after 112 placements.
 
 ## Start here
 
