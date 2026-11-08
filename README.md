@@ -1,6 +1,6 @@
-# MasonMind
+# Robotic Arm Bricklaying for a Wave Wall
 
-Research implementation of robotic masonry with a Franka Panda and task-level LLM agents.
+A simulated Franka Panda robotic arm picks and places bricks to build a wave-pattern wall. The Python project uses PyBullet for simulation, RRT-Connect for motion planning, and RGB-D scans to verify each course.
 
 ![Eight camera scans show the simulated Franka Panda building a connected wave wall, from 12 pieces in the first course to 100 in the eighth.](assets/masonmind_connected_wave.gif)
 
